@@ -1,0 +1,7 @@
+.env
+
+# Ignore build artifacts
+artifacts/
+cache/
+node_modules/
+typechain-types/
