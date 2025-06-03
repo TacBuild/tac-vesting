@@ -98,7 +98,7 @@ contract StakingAccount {
     /// @dev Withdraw the undelegated tokens
     /// @param to The address to withdraw the undelegated tokens to.
     function withdrawUndelegatedTokens(
-        address payable to,
+        address to,
         uint256 amount
     ) external onlyVestingContract nonZeroAddress(to) nonZeroAmount(amount) {
         if (address(this).balance < amount) {

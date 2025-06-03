@@ -27,19 +27,21 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         int64 completionTime
     );
 
-    event WithdrawnUndelegatedTokens(
+    event WithdrawnUndelegated(
         address user,
+        address to,
         uint256 amount
     );
 
     event Withdrawn(
         address user,
-        string validatorAddress,
+        address to,
         uint256 amount
     );
 
     event RewardsClaimed(
         address user,
+        address to,
         string validatorAddress
     );
 
@@ -55,12 +57,11 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     bytes32 public merkleRoot;
 
     struct UserInfo {
-        uint40         choiceStartTime; // The time when the user made their choice
-        uint8          stepMask; // Bitmask representing the tranches steps
+        uint64         choiceStartTime; // The time when the user made their choice
         StakingAccount stakingAccount; // User's staking account
         uint256        userTotalRewards; // Total rewards the user is entitled to
-        uint256        availableRewards; // Total rewards available for the user to withdraw or undelegate
-        uint256        withdrawn; // Total rewards the user has withdrawn
+        uint256        unlocked; // Total rewards which are unlocked and can be withdrawn or undelegated
+        uint256        withdrawn; // Total rewards the user has already withdrawn or undelegated
     }
 
     mapping(address => UserInfo) public info;
@@ -136,7 +137,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         address user,
         uint256 userTotalRewards
     ) internal pure returns (bytes32) {
-        return keccak256(bytes.concat(keccak256(abi.encodePacked(user, userTotalRewards))));
+        return keccak256(bytes.concat(keccak256(abi.encode(user, userTotalRewards))));
     }
 
     /// @dev Function to check the merkle proof for the user
@@ -181,36 +182,39 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         require(address(userInfo.stakingAccount) == address(0), "TacVesting: User has not chosen immediate withdraw");
     }
 
-    /// @dev Recalculate available rewards for the user
-    /// @param userInfo The UserInfo struct of the user.
-    function recalcAvailableRewards(
-        UserInfo storage userInfo
-    ) internal {
-        for (uint8 step = 0; step < VESTING_STEPS; step++) {
-            if ((userInfo.stepMask & (uint8(1) << step)) == 0) {
-                uint256 stepStartTime = userInfo.choiceStartTime + (step * stepDuration);
-                if (block.timestamp >= stepStartTime) {
+    /// @dev Calculate user's unlocked rewards.
+    /// @param userInfo The user info struct.
+    /// @return unlocked The amount of unlocked rewards for the user.
+    function calculateUnlocked(
+        UserInfo memory userInfo
+    ) internal view returns (uint256 unlocked) {
+        if (userInfo.choiceStartTime == 0) {
+            return 0; // User has not made a choice yet
+        }
 
-                    if (step == VESTING_STEPS - 1) {
-                        // unlock all remaining rewards on the last step
-                        userInfo.availableRewards = userInfo.userTotalRewards;
-                    } else {
-                        uint256 stepRewards;
-                        if (address(userInfo.stakingAccount) != address(0)) {
-                            // if user choosen staking - he can undelegate 1/3 of total rewards every step
-                            stepRewards = userInfo.userTotalRewards / VESTING_STEPS;
+        uint256 afterChoiceTime = block.timestamp - userInfo.choiceStartTime;
+        uint256 stepsCompleted = afterChoiceTime / stepDuration > VESTING_STEPS ? VESTING_STEPS : afterChoiceTime / stepDuration;
 
-                        } else {
-                            // if user choosen immediate withdraw - he can withdraw (total - immediate) / STEPS every step
-                            stepRewards = (userInfo.userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / (VESTING_STEPS * BASIS_POINTS);
-                        }
-                        userInfo.availableRewards += stepRewards;
-                    }
-
-                    userInfo.stepMask |= (uint8(1) << step); // Mark this step as completed
-                }
+        if (stepsCompleted == VESTING_STEPS) {
+            unlocked = userInfo.userTotalRewards; // All rewards are unlocked after the last step
+        } else {
+            if (address(userInfo.stakingAccount) != address(0)) // if user choosen staking
+            {
+                unlocked = (userInfo.userTotalRewards * stepsCompleted) / VESTING_STEPS;
+            } else { // if user choosen immediate withdraw
+                uint256 firstTransfer = (userInfo.userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
+                uint256 stepRewards = (userInfo.userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / (VESTING_STEPS * BASIS_POINTS);
+                unlocked = firstTransfer + (stepRewards * stepsCompleted);
             }
         }
+    }
+
+    /// @dev Update unlocked rewards for the user
+    /// @param userInfo The UserInfo struct of the user.
+    function updateUnlocked(
+        UserInfo storage userInfo
+    ) internal {
+        userInfo.unlocked = calculateUnlocked(userInfo);
     }
 
     //================================================================
@@ -232,7 +236,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
 
         UserInfo storage userInfo = info[msg.sender];
         require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
-        userInfo.choiceStartTime = uint40(block.timestamp);
+        userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
         userInfo.stakingAccount = new StakingAccount(stakingContract, distributionContract);
         if (address(userInfo.stakingAccount) == address(0)) {
@@ -240,11 +244,13 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         }
         // Delegate the tokens to the validator
         userInfo.stakingAccount.delegate{value: userTotalRewards}(validatorAddress);
+
+        emit Delegated(msg.sender, validatorAddress, userTotalRewards);
     }
 
-    /// @dev Undelegate available rewards
+    /// @dev Undelegate available stake
     /// @param validatorAddress The address of the validator to undelegate from.
-    /// @param amount The amount of rewards to undelegate.
+    /// @param amount The amount to undelegate.
     function undelegate(
         string memory validatorAddress,
         uint256 amount
@@ -252,10 +258,10 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         UserInfo storage userInfo = info[msg.sender];
         checkStaking(userInfo);
 
-        recalcAvailableRewards(userInfo);
+        updateUnlocked(userInfo);
         require(
-            (userInfo.availableRewards - userInfo.withdrawn) >= amount,
-            "TacVesting: No available rewards to undelegate");
+            (userInfo.unlocked - userInfo.withdrawn) >= amount,
+            "TacVesting: No available funds to undelegate");
 
         // Undelegate the tokens from the validator
         int64 completionTime = userInfo.stakingAccount.undelegate(validatorAddress, amount);
@@ -265,80 +271,117 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     }
 
     /// @dev Claim delegator rewards
+    /// @param to The address to send the rewards to.
     /// @param validatorAddress The address of the validator to claim rewards from.
     function claimDelegatorRewards(
+        address to,
         string memory validatorAddress
     ) external nonReentrant {
         UserInfo storage userInfo = info[msg.sender];
         checkStaking(userInfo);
+        require(to != address(0), "TacVesting: Cannot withdraw to zero address");
 
         // user can claim rewards only after the first step is completed
-        if (userInfo.choiceStartTime + stepDuration >= block.timestamp) {
+        if (userInfo.choiceStartTime + stepDuration > block.timestamp) {
             revert("TacVesting: Cannot claim rewards before the first step is completed");
         }
 
         // Withdraw the rewards from the validator
         userInfo.stakingAccount.withdrawRewards(payable(msg.sender), validatorAddress);
 
-        emit RewardsClaimed(msg.sender, validatorAddress);
+        emit RewardsClaimed(msg.sender, to, validatorAddress);
     }
 
     /// @dev Withdraw undelegated tokens. Token withdrawal is possible only after the undelegation period is over.
     /// Undelegated tokens just stored on staking account and can be withdrawn at any time.
-    /// @param amount The amount of undelegated tokens to withdraw.
-    function withdrawUndelegatedTokens(
+    /// @param to The address to withdraw the undelegated tokens to.
+    /// @param amount The amount to withdraw.
+    function withdrawUndelegated(
+        address to,
         uint256 amount
     ) external nonReentrant {
         UserInfo storage userInfo = info[msg.sender];
         checkStaking(userInfo);
+        require(to != address(0), "TacVesting: Cannot withdraw to zero address");
         // Withdraw the undelegated tokens
-        userInfo.stakingAccount.withdrawUndelegatedTokens(payable(msg.sender), amount);
+        userInfo.stakingAccount.withdrawUndelegatedTokens(msg.sender, amount);
 
-        emit Withdrawn(msg.sender, "", amount);
+        emit WithdrawnUndelegated(msg.sender, to, amount);
     }
 
     // == IMMEDIATE WITHDRAW ==
 
     /// @dev Choose immediate withdraw
+    /// @param to The address to send the immediate rewards to.
     /// @param userTotalRewards The total rewards the user is entitled to.
     /// @param merkleProof The merkle proof to verify the user's entitlement.
     function chooseImmediateWithdraw(
+        address to,
         uint256 userTotalRewards,
         bytes32[] calldata merkleProof
     ) external nonReentrant {
         checkProof(msg.sender, userTotalRewards, merkleProof);
 
+        require(to != address(0), "TacVesting: Cannot withdraw to zero address");
+
         UserInfo storage userInfo = info[msg.sender];
         require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
-        userInfo.choiceStartTime = uint40(block.timestamp);
+        userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
-        userInfo.availableRewards = (userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / BASIS_POINTS;
-        userInfo.withdrawn = userInfo.availableRewards;
+        userInfo.unlocked = (userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / BASIS_POINTS;
+        userInfo.withdrawn = userInfo.unlocked;
 
         // send immediate rewards to user
-        (bool success, ) = address(msg.sender).call{ value: userInfo.availableRewards }("");
+        (bool success, ) = to.call{ value: userInfo.unlocked }("");
         require(success, "TacVesting: Immediate withdraw failed");
+
+        emit Withdrawn(msg.sender, to, userInfo.unlocked);
     }
 
-    /// @dev Withdraw available rewards
-    /// @param amount The amount of rewards to withdraw.
-    function withdrawAvailableRewards(
+    /// @dev Withdraw available funds
+    /// @param amount The amount to withdraw.
+    function withdraw(
+        address to,
         uint256 amount
     ) external nonReentrant {
         UserInfo storage userInfo = info[msg.sender];
         checkImmediateChoice(userInfo);
 
-        recalcAvailableRewards(userInfo);
+        updateUnlocked(userInfo);
         require(
-            (userInfo.availableRewards - userInfo.withdrawn) >= amount,
-            "TacVesting: No available rewards to withdraw");
+            (userInfo.unlocked - userInfo.withdrawn) >= amount,
+            "TacVesting: No available funds to withdraw");
 
-        // send available rewards to user
-        (bool success, ) = address(msg.sender).call{ value: amount }("");
+        // send rewards to user
+        (bool success, ) = address(to).call{ value: amount }("");
         require(success, "TacVesting: Withdraw failed");
         userInfo.withdrawn += amount;
 
-        emit Withdrawn(msg.sender, "", amount);
+        emit Withdrawn(msg.sender, to, amount);
     }
 
+
+    //================================================================
+    // VIEW FUNCTIONS
+    //================================================================
+
+    /// @dev Get user's available rewards
+    /// @param user The address of the user.
+    /// @return unlocked The amount of unlocked rewards which can be withdrawn or undelegated.
+    function getUnlocked(
+        address user
+    ) external view returns (uint256) {
+        UserInfo memory userInfo = info[user];
+        return calculateUnlocked(userInfo);
+    }
+
+    /// @dev Get user's available rewards
+    /// @param user The address of the user.
+    /// @return available The amount of available rewards which can be withdrawn or undelegated.
+    function getAvailableToWithdraw(
+        address user
+    ) external view returns (uint256) {
+        UserInfo memory userInfo = info[user];
+        return calculateUnlocked(userInfo) - userInfo.withdrawn;
+    }
 }

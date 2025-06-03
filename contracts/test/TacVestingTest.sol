@@ -34,7 +34,7 @@ contract TacVestingTest is TacVesting {
 
         UserInfo storage userInfo = info[msg.sender];
         require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
-        userInfo.choiceStartTime = uint40(block.timestamp);
+        userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
         userInfo.stakingAccount = new StakingAccountTest(stakingContract, distributionContract);
         if (address(userInfo.stakingAccount) == address(0)) {
@@ -42,5 +42,7 @@ contract TacVestingTest is TacVesting {
         }
         // Delegate the tokens to the validator
         userInfo.stakingAccount.delegate{value: userTotalRewards}(validatorAddress);
+
+        emit Delegated(msg.sender, validatorAddress, userTotalRewards);
     }
 }
