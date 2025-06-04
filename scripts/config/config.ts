@@ -9,3 +9,9 @@ export const mainnetConfig: DeployConfig = {
     distributionContractAddress: '0x0000000000000000000000000000000000000801',
     stepDuration: 3600n * 24n * 30n, // 30 days in seconds
 };
+
+export const testnetConfig: DeployConfig = {
+    stackingContractAddress: '0x0000000000000000000000000000000000000800',
+    distributionContractAddress: '0x0000000000000000000000000000000000000801',
+    stepDuration: 60n * 5n, // 5 mins
+};

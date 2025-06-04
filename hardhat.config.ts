@@ -37,23 +37,19 @@ const config: HardhatUserConfig = {
 	    url:  "http://127.0.0.1:8545",
       timeout: 3600000
     },
-    tac_testnet: {
-      chainId: 2390,
-      url: TAC_TESTNET_URL
-    },
     tac_testnet_spb: {
       chainId: 2391,
       url: TAC_TESTNET_SPB_URL
     }
   },
   gasReporter: {
-    enabled: false,
+    enabled: true,
     currency: 'ETH',
     gasPrice: 1
   },
   contractSizer: {
     alphaSort: false,
-    runOnCompile: false,
+    runOnCompile: true,
     disambiguatePaths: false,
   },
   etherscan: {

@@ -20,4 +20,3 @@ export function createRewardsMerkleTree(rewards: RewardsConfig[]): MerkleTree {
     });
     return new MerkleTree(hashedLeaves, keccak256, { sortPairs: true });
 }
-
