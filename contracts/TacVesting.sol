@@ -9,8 +9,6 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 
 import { StakingAccount } from "./StakingAccount.sol";
 
-import "hardhat/console.sol";
-
 /// @title TacVesting
 /// @author TACBuild Team
 contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
