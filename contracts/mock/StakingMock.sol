@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 
 contract StakingMock {
 
-    uint64 public constant COMPLETION_TIMEOUT = 1 days;
+    uint64 public constant COMPLETION_TIMEOUT = 1 hours;
 
     struct Delegation {
         uint64 delegationTime;
@@ -24,6 +24,13 @@ contract StakingMock {
         string memory validatorAddress
     ) external view returns (Delegation memory delegation) {
         return delegations[delegatorAddress][validatorAddress];
+    }
+
+    function getUndelegation(
+        address delegatorAddress,
+        uint64 undelegationTime
+    ) external view returns (Undelegation memory undelegation) {
+        return undelegations[delegatorAddress][undelegationTime];
     }
 
     /// @dev Defines a method for performing a delegation of coins from a delegator to a validator.

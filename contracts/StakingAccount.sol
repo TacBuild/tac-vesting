@@ -56,6 +56,10 @@ contract StakingAccount {
         _;
     }
 
+    receive() external payable {
+        // This function allows the contract to receive Ether from the staking contract
+    }
+
     /// @dev Function to delegate tokens
     /// @param validatorAddress The address of the validator to delegate to.
     function delegate(

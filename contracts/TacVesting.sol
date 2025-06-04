@@ -9,6 +9,8 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 
 import { StakingAccount } from "./StakingAccount.sol";
 
+import "hardhat/console.sol";
+
 /// @title TacVesting
 /// @author TACBuild Team
 contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
@@ -24,6 +26,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     event Undelegated(
         address user,
         string validatorAddress,
+        uint256 amount,
         int64 completionTime
     );
 
@@ -158,6 +161,14 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
 
     /// @dev Check if the user has made a choice
     /// @param userInfo The UserInfo struct of the user.
+    function checkNoChoice(
+        UserInfo storage userInfo
+    ) internal view {
+        require(userInfo.choiceStartTime == 0, "TacVesting: User already made a choice");
+    }
+
+    /// @dev Check if the user has made a choice
+    /// @param userInfo The UserInfo struct of the user.
     function checkChoiceTime(
         UserInfo storage userInfo
     ) internal view {
@@ -194,16 +205,14 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
 
         uint256 afterChoiceTime = block.timestamp - userInfo.choiceStartTime;
         uint256 stepsCompleted = afterChoiceTime / stepDuration > VESTING_STEPS ? VESTING_STEPS : afterChoiceTime / stepDuration;
-
         if (stepsCompleted == VESTING_STEPS) {
             unlocked = userInfo.userTotalRewards; // All rewards are unlocked after the last step
         } else {
-            if (address(userInfo.stakingAccount) != address(0)) // if user choosen staking
-            {
+            if (address(userInfo.stakingAccount) != address(0)) { // if user choosen staking
                 unlocked = (userInfo.userTotalRewards * stepsCompleted) / VESTING_STEPS;
             } else { // if user choosen immediate withdraw
                 uint256 firstTransfer = (userInfo.userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
-                uint256 stepRewards = (userInfo.userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / (VESTING_STEPS * BASIS_POINTS);
+                uint256 stepRewards = (userInfo.userTotalRewards - firstTransfer) / VESTING_STEPS;
                 unlocked = firstTransfer + (stepRewards * stepsCompleted);
             }
         }
@@ -235,7 +244,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         checkProof(msg.sender, userTotalRewards, merkleProof);
 
         UserInfo storage userInfo = info[msg.sender];
-        require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
+        checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
         userInfo.stakingAccount = new StakingAccount(stakingContract, distributionContract);
@@ -267,7 +276,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         int64 completionTime = userInfo.stakingAccount.undelegate(validatorAddress, amount);
         userInfo.withdrawn += amount;
 
-        emit Undelegated(msg.sender, validatorAddress, completionTime);
+        emit Undelegated(msg.sender, validatorAddress, amount, completionTime);
     }
 
     /// @dev Claim delegator rewards
@@ -304,7 +313,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         checkStaking(userInfo);
         require(to != address(0), "TacVesting: Cannot withdraw to zero address");
         // Withdraw the undelegated tokens
-        userInfo.stakingAccount.withdrawUndelegatedTokens(msg.sender, amount);
+        userInfo.stakingAccount.withdrawUndelegatedTokens(to, amount);
 
         emit WithdrawnUndelegated(msg.sender, to, amount);
     }
@@ -325,10 +334,10 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         require(to != address(0), "TacVesting: Cannot withdraw to zero address");
 
         UserInfo storage userInfo = info[msg.sender];
-        require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
+        checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
-        userInfo.unlocked = (userTotalRewards * (BASIS_POINTS - IMMEDIATE_PCT)) / BASIS_POINTS;
+        userInfo.unlocked = (userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
         userInfo.withdrawn = userInfo.unlocked;
 
         // send immediate rewards to user
@@ -346,7 +355,6 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     ) external nonReentrant {
         UserInfo storage userInfo = info[msg.sender];
         checkImmediateChoice(userInfo);
-
         updateUnlocked(userInfo);
         require(
             (userInfo.unlocked - userInfo.withdrawn) >= amount,
@@ -375,10 +383,10 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         return calculateUnlocked(userInfo);
     }
 
-    /// @dev Get user's available rewards
+    /// @dev Get user's available rewards which can be withdrawn or undelegated
     /// @param user The address of the user.
     /// @return available The amount of available rewards which can be withdrawn or undelegated.
-    function getAvailableToWithdraw(
+    function getAvailable(
         address user
     ) external view returns (uint256) {
         UserInfo memory userInfo = info[user];

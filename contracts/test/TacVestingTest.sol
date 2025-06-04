@@ -33,7 +33,7 @@ contract TacVestingTest is TacVesting {
         checkProof(msg.sender, userTotalRewards, merkleProof);
 
         UserInfo storage userInfo = info[msg.sender];
-        require(userInfo.choiceStartTime == 0, "TacVesting: User has already made a choice");
+        checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
         userInfo.stakingAccount = new StakingAccountTest(stakingContract, distributionContract);
