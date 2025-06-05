@@ -43,13 +43,13 @@ const config: HardhatUserConfig = {
     }
   },
   gasReporter: {
-    enabled: true,
+    enabled: false,
     currency: 'ETH',
     gasPrice: 1
   },
   contractSizer: {
     alphaSort: false,
-    runOnCompile: true,
+    runOnCompile: false,
     disambiguatePaths: false,
   },
   etherscan: {

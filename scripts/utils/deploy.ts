@@ -9,7 +9,7 @@ export async function deployTacVesting(deployer: Signer, config: DeployConfig ):
     const tacVesting = await upgrades.deployProxy(
         TacVesting,
         [
-            deployer.getAddress(), // admin address
+            await deployer.getAddress(), // admin address
             config.stackingContractAddress, // stacking contract address
             config.distributionContractAddress, // distribution contract address
             config.stepDuration // step duration in seconds
