@@ -16,8 +16,6 @@ contract StakingAccount {
     error ZeroAddress();
     error InsufficientBalance(uint256 balance, uint256 required);
     error FailedToSendFunds();
-    error FailedToCallStaking(bytes data);
-    error FailedToCallDistribution(bytes result);
 
     // === STATE VARIABLES ===
 
@@ -115,29 +113,4 @@ contract StakingAccount {
             revert FailedToSendFunds();
         }
     }
-
-    /// @dev Fuction to call any view function on the Staking contract
-    /// @param data The data to call the view function with.
-    function callStakingViewFunction(
-        bytes memory data
-    ) external view returns (bytes memory) {
-        (bool success, bytes memory result) = address(stakingContract).staticcall(data);
-        if (!success) {
-            revert FailedToCallStaking(result);
-        }
-        return result;
-    }
-
-    /// @dev Fuction to call any view function on the Distribution contract
-    /// @param data The data to call the view function with.
-    function callDistributionViewFunction(
-        bytes memory data
-    ) external view returns (bytes memory) {
-        (bool success, bytes memory result) = address(distributionContract).staticcall(data);
-        if (!success) {
-            revert FailedToCallDistribution(result);
-        }
-        return result;
-    }
-
 }
