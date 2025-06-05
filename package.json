@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx hardhat run --network localhost ./scripts/testnet/test.ts"
   },
   "keywords": [],
   "author": "",

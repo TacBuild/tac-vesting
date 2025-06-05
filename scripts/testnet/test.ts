@@ -13,11 +13,10 @@ import { setTimeout } from "timers/promises";
 
 async function main() {
     // validator
-    const validatorPrivateKey = "0x2962038C2754CAA167A575D23673C583FAEB2C7F00E76D06391E4AB0133A80BB";
+    const validatorPrivateKey = process.env.VALIDATOR_PRIVATE_KEY!;
     const validator = new ethers.Wallet(validatorPrivateKey, ethers.provider);
     // deployer
-    const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY!;
-    const deployer = new ethers.Wallet(deployerPrivateKey, ethers.provider);
+    const deployer = ethers.Wallet.createRandom(ethers.provider);
 
     // send some TAC to deployer
     await (await validator.sendTransaction({
@@ -128,7 +127,7 @@ async function main() {
             for (const log of rec!.logs) {
                 const event = tacVesting.interface.parseLog(log);
                 if (event?.name === "Delegated") {
-                    console.log(`Delegated event: User ${event.args.user} delegated ${ethers.formatEther(event.args.amount)} TAC to validator ${event.args.validator}`);
+                    console.log(`Delegated event: User ${event.args.user} delegated ${ethers.formatEther(event.args.amount)} TAC to validator ${event.args.validatorAddress}`);
                     eventFound = true;
                 }
             }
