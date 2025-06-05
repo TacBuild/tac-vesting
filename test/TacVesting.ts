@@ -47,9 +47,7 @@ describe('TacVesting', function () {
 
     // users withdraw/undelegation info
     let usersWithdraw: {
-        [key: string]: {
-            withdrawn: bigint;
-        }
+        [key: string]: bigint;
     }
 
     before(async function () {
@@ -163,9 +161,7 @@ describe('TacVesting', function () {
                 );
                 await expect(tx).to.emit(tacVesting, 'Delegated').withArgs(userAddress, validatorAddress, userReward.rewardAmount);
 
-                usersWithdraw[userAddress] = {
-                    withdrawn: 0n
-                };
+                usersWithdraw[userAddress] = 0n;
 
                 const userInfo = await tacVesting.info(userAddress);
 
@@ -211,9 +207,7 @@ describe('TacVesting', function () {
                 expect(vestingBalanceAfter).to.equal(vestingBalanceBefore - immediateWithdrawAmount);
                 expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + immediateWithdrawAmount);
 
-                usersWithdraw[userAddress] = {
-                    withdrawn: immediateWithdrawAmount
-                };
+                usersWithdraw[userAddress] = immediateWithdrawAmount;
 
                 // check user can't choose again
                 await expect(tacVesting.connect(user).chooseStaking(validatorAddress, userReward.rewardAmount, proof))
@@ -267,7 +261,7 @@ describe('TacVesting', function () {
                     expect(unlockedAmount).to.equal(expectedUnlockAmount);
 
                     const availableToUndelegate = await tacVesting.getAvailable(userAddress);
-                    const expectedUnlockAmountForUndelegate = expectedUnlockAmount - usersWithdraw[userAddress].withdrawn;
+                    const expectedUnlockAmountForUndelegate = expectedUnlockAmount - usersWithdraw[userAddress];
                     expect(availableToUndelegate).to.equal(expectedUnlockAmountForUndelegate);
 
                     // withdraw must failed for staking choice
@@ -287,10 +281,10 @@ describe('TacVesting', function () {
                     let tx = await tacVesting.connect(user).undelegate(validatorAddress, undelegateAmount);
                     await expect(tx).to.emit(tacVesting, 'Undelegated').withArgs(userAddress, validatorAddress, undelegateAmount, BigInt(await latest()) + COMPLETION_TIMEOUT);
                     const undelegationTime = await latest();
-                    usersWithdraw[userAddress].withdrawn += undelegateAmount;
+                    usersWithdraw[userAddress] += undelegateAmount;
 
                     userInfo = await tacVesting.info(userAddress);
-                    expect(userInfo.withdrawn).to.equal(usersWithdraw[userAddress].withdrawn);
+                    expect(userInfo.withdrawn).to.equal(usersWithdraw[userAddress]);
 
                     const delegationAfter = await stakingMock.getDelegation(userInfo.stakingAccount, validatorAddress);
                     expect(delegationAfter.amount).to.equal(delegationBefore.amount - undelegateAmount);
@@ -336,7 +330,7 @@ describe('TacVesting', function () {
                     expect(unlockedAmount).to.equal(expectedUnlockAmount);
 
                     const availableToWithdraw = await tacVesting.getAvailable(userAddress);
-                    const expectedAvailableToWithdraw = expectedUnlockAmount - usersWithdraw[userAddress].withdrawn;
+                    const expectedAvailableToWithdraw = expectedUnlockAmount - usersWithdraw[userAddress];
 
                     expect(availableToWithdraw).to.equal(expectedAvailableToWithdraw);
 
@@ -358,7 +352,7 @@ describe('TacVesting', function () {
                     const receiverBalanceAfter = await admin.provider.getBalance(receiverAddress);
                     expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + toWithdraw);
 
-                    usersWithdraw[userAddress].withdrawn += toWithdraw;
+                    usersWithdraw[userAddress] += toWithdraw;
                 }
             }
         }
@@ -377,13 +371,13 @@ describe('TacVesting', function () {
                 if (availableToUndelegate === 0n) {
                     continue; // no available funds to undelegate
                 }
-                expect(availableToUndelegate).to.equal(userReward.rewardAmount - usersWithdraw[userAddress].withdrawn);
+                expect(availableToUndelegate).to.equal(userReward.rewardAmount - usersWithdraw[userAddress]);
 
                 let tx = await tacVesting.connect(user).undelegate(validatorAddress, availableToUndelegate);
                 await expect(tx).to.emit(tacVesting, 'Undelegated').withArgs(userAddress, validatorAddress, availableToUndelegate, BigInt(await latest()) + COMPLETION_TIMEOUT);
                 const undelegationTime = await latest();
 
-                usersWithdraw[userAddress].withdrawn += availableToUndelegate;
+                usersWithdraw[userAddress] += availableToUndelegate;
 
                 // wait for completion timeout
                 await increase(COMPLETION_TIMEOUT);
@@ -400,7 +394,7 @@ describe('TacVesting', function () {
 
             } else { // user chose immediate withdraw
                 // check that user can withdraw all remaining funds
-                const toWithdraw = (userReward.rewardAmount - usersWithdraw[userAddress].withdrawn);
+                const toWithdraw = (userReward.rewardAmount - usersWithdraw[userAddress]);
                 const receiverBalanceBefore = await admin.provider.getBalance(receiverAddress);
                 let tx = await tacVesting.connect(user).withdraw(receiverAddress, toWithdraw);
                 await expect(tx).to.emit(tacVesting, 'Withdrawn').withArgs(userAddress, receiverAddress, toWithdraw);
@@ -408,7 +402,7 @@ describe('TacVesting', function () {
                 const receiverBalanceAfter = await admin.provider.getBalance(receiverAddress);
                 expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + toWithdraw);
 
-                usersWithdraw[userAddress].withdrawn += toWithdraw;
+                usersWithdraw[userAddress] += toWithdraw;
             }
 
             userInfo = await tacVesting.info(userAddress);
