@@ -7,7 +7,7 @@ export const mainnetConfig: DeployConfig = {
 };
 
 export const testnetConfig: DeployConfig = {
-    stepDuration: 60n * 5n, // 5 mins
+    stepDuration: 60n * 3n, // 3 mins
 };
 
 export const StakingPrecompileAddress = "0x0000000000000000000000000000000000000800";
