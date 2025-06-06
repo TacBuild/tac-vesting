@@ -2,14 +2,14 @@
 
 pragma solidity ^0.8.28;
 
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+
 import { TacVesting } from "../TacVesting.sol";
 import { StakingAccountTest } from "./StakingAccountTest.sol";
 
 contract TacVestingTest is TacVesting {
     function initialize(
         address _adminAddress,
-        address _stakingContract,
-        address _distributionContract,
         uint256 _stepDuration
     ) override initializer public {
          require(_adminAddress != address(0), "TacVesting: Admin address cannot be zero");
@@ -17,10 +17,6 @@ contract TacVestingTest is TacVesting {
         __Ownable_init(_adminAddress);
         __ReentrancyGuard_init();
 
-        require(_stakingContract != address(0), "TacVesting: Staking contract cannot be zero");
-        require(_distributionContract != address(0), "TacVesting: Distribution contract cannot be zero");
-        stakingContract = _stakingContract;
-        distributionContract = _distributionContract;
         stepDuration = _stepDuration;
     }
 
@@ -36,7 +32,11 @@ contract TacVestingTest is TacVesting {
         checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
-        userInfo.stakingAccount = new StakingAccountTest(stakingContract, distributionContract);
+        userInfo.stakingAccount = StakingAccountTest(payable(Create2.deploy(
+            0,
+            keccak256(abi.encode(msg.sender)),
+            type(StakingAccountTest).creationCode
+        )));
         if (address(userInfo.stakingAccount) == address(0)) {
             revert("TacVesting: Failed to create StakingAccount");
         }

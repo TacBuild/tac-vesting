@@ -10,8 +10,6 @@ export async function deployTacVesting(deployer: Signer, config: DeployConfig ):
         TacVesting,
         [
             await deployer.getAddress(), // admin address
-            config.stackingContractAddress, // stacking contract address
-            config.distributionContractAddress, // distribution contract address
             config.stepDuration // step duration in seconds
         ],
         {

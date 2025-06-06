@@ -12,13 +12,9 @@ struct Coin {
 
 contract DistributionMock {
 
-    StakingMock public stakingContract;
+    StakingMock public constant stakingContract = StakingMock(0x0000000000000000000000000000000000000800);
     uint256 public constant REWARDS_STEP_DURATION = 1 hours;
     uint256 public constant REWARDS_STEP_AMOUNT= 1 ether;
-
-    constructor(address _stakingContract) {
-        stakingContract = StakingMock(_stakingContract);
-    }
 
     /// @dev Withdraw the rewards of a delegator from a validator
     /// @param delegatorAddress The address of the delegator

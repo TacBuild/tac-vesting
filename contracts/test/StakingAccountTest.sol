@@ -6,10 +6,6 @@ import { StakingAccount } from "../StakingAccount.sol";
 import { StakingMock } from "../mock/StakingMock.sol";
 
 contract StakingAccountTest is StakingAccount {
-    constructor(address _stakingContract, address _distributionContract)
-        StakingAccount(_stakingContract, _distributionContract)
-    {}
-
     // redeclare delegate function for call staking mock payable function
     function delegate(
         string memory validatorAddress

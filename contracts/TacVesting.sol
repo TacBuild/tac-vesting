@@ -7,6 +7,8 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+
 import { StakingAccount } from "./StakingAccount.sol";
 
 /// @title TacVesting
@@ -67,10 +69,6 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
 
     mapping(address => UserInfo) public info;
 
-    // TODO: remove from state and move to const variables
-    address public stakingContract;
-    address public distributionContract;
-
     // === END OF STATE VARIABLES ===
 
     /**
@@ -80,8 +78,6 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
      */
     function initialize(
         address _adminAddress,
-        address _stakingContract,
-        address _distributionContract,
         uint256 _stepDuration
     ) public initializer virtual { // TODO: remove virtual modifier
         require(_adminAddress != address(0), "TacVesting: Admin address cannot be zero");
@@ -89,10 +85,6 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         __Ownable_init(_adminAddress);
         __ReentrancyGuard_init();
 
-        require(_stakingContract != address(0), "TacVesting: Staking contract cannot be zero");
-        require(_distributionContract != address(0), "TacVesting: Distribution contract cannot be zero");
-        stakingContract = _stakingContract;
-        distributionContract = _distributionContract;
         stepDuration = _stepDuration;
     }
 
@@ -245,7 +237,11 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = userTotalRewards;
-        userInfo.stakingAccount = new StakingAccount(stakingContract, distributionContract);
+        userInfo.stakingAccount = StakingAccount(payable(Create2.deploy(
+            0,
+            keccak256(abi.encode(msg.sender)),
+            type(StakingAccount).creationCode
+        )));
         if (address(userInfo.stakingAccount) == address(0)) {
             revert("TacVesting: Failed to create StakingAccount");
         }

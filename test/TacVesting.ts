@@ -1,6 +1,6 @@
 import { ethers } from 'hardhat';
-import { expect, use } from 'chai';
-import { setBalance } from '@nomicfoundation/hardhat-network-helpers';
+import { expect } from 'chai';
+import { setBalance, setCode } from '@nomicfoundation/hardhat-network-helpers';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import { Provider, Signer } from 'ethers';
 
@@ -9,6 +9,10 @@ import { RewardsConfig } from '../scripts/utils/rewards';
 import { createLeaf, createRewardsMerkleTree } from '../scripts/utils/rewards';
 import MerkleTree from 'merkletreejs';
 import { increase, latest } from '@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time';
+import { DistributionPrecompileAddress, StakingPrecompileAddress, testnetConfig } from '../scripts/config/config';
+
+import StakingMockArtifact from '../artifacts/contracts/mock/StakingMock.sol/StakingMock.json';
+import DistributionMockArtifact from '../artifacts/contracts/mock/DistributionMock.sol/DistributionMock.json';
 
 function randInt(min: number, max: number): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -54,14 +58,14 @@ describe('TacVesting', function () {
 
         [admin] = await ethers.getSigners();
 
-        // deploy StakingMock
-        const StakingMock = await ethers.getContractFactory('StakingMock');
-        stakingMock = await StakingMock.deploy();
-        await stakingMock.waitForDeployment();
-        // deploy DistributionMock
-        const DistributionMock = await ethers.getContractFactory('DistributionMock');
-        distributionMock = await DistributionMock.deploy(stakingMock.getAddress());
-        await distributionMock.waitForDeployment();
+        // deploy StakingMock to precompile address
+        // set code to address using hardhat network helpers
+        await setCode(StakingPrecompileAddress, StakingMockArtifact.deployedBytecode);
+        stakingMock = await ethers.getContractAt('StakingMock', StakingPrecompileAddress);
+        // deploy DistributionMock to precompile address
+        // set code to address using hardhat network helpers
+        await setCode(DistributionPrecompileAddress, DistributionMockArtifact.deployedBytecode);
+        distributionMock = await ethers.getContractAt('DistributionMock', DistributionPrecompileAddress);
 
         await setBalance(await distributionMock.getAddress(), ethers.parseEther("100000000000000000"));
 
@@ -73,8 +77,6 @@ describe('TacVesting', function () {
         // init
         let tx = await tacVesting.initialize(
             admin.getAddress(), // admin address
-            stakingMock.getAddress(), // stacking contract address
-            distributionMock.getAddress(), // distribution contract address
             3600n * 24n * 30n // step duration in seconds (30 days)
         );
         await tx.wait();

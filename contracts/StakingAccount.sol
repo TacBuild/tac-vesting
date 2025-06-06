@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.28;
 
-import { StakingI } from "./precompiles/staking/StakingI.sol";
-import { DistributionI } from "./precompiles/distribution/DistributionI.sol";
+import { StakingI, STAKING_PRECOMPILE_ADDRESS } from "./precompiles/staking/StakingI.sol";
+import { DistributionI, DISTRIBUTION_PRECOMPILE_ADDRESS } from "./precompiles/distribution/DistributionI.sol";
 import { Coin } from "./precompiles/common/Types.sol";
 
 /// @title StakingAccount
@@ -22,15 +22,14 @@ contract StakingAccount {
     address public vestingContract;
 
     // TODO: remove from state and move to const variables
-    StakingI public stakingContract;
-    DistributionI public distributionContract;
+    StakingI public constant stakingContract = StakingI(STAKING_PRECOMPILE_ADDRESS);
+    DistributionI public constant distributionContract = DistributionI(DISTRIBUTION_PRECOMPILE_ADDRESS);
 
     // === END OF STATE VARIABLES ===
 
-    constructor(address _stakingContract, address _distributionContract) {
+    constructor() {
+        // Set the vesting contract address
         vestingContract = msg.sender;
-        stakingContract = StakingI(_stakingContract);
-        distributionContract = DistributionI(_distributionContract);
     }
 
     modifier onlyVestingContract() {
