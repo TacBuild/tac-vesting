@@ -1,5 +1,6 @@
 import { ethers } from 'hardhat';
 import { expect } from 'chai';
+import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 import { setBalance, setCode } from '@nomicfoundation/hardhat-network-helpers';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import { Provider, Signer } from 'ethers';
@@ -296,7 +297,7 @@ describe('TacVesting', function () {
 
                     // check that user can claim delegator rewards
                     tx = await tacVesting.connect(user).claimDelegatorRewards(rewardsReceiverAddress, validatorAddress);
-                    await expect(tx).to.emit(tacVesting, 'RewardsClaimed').withArgs(userAddress, rewardsReceiverAddress, validatorAddress);
+                    await expect(tx).to.emit(tacVesting, 'RewardsClaimed').withArgs(userAddress, rewardsReceiverAddress, validatorAddress, anyValue);
 
                     // wait for completion timeout
                     await increase(COMPLETION_TIMEOUT);
@@ -307,13 +308,13 @@ describe('TacVesting', function () {
 
                     // check that user cant recieve more than undelegated amount
                     const stakingAccountContract = await ethers.getContractAt('StakingAccount', userInfo.stakingAccount, user);
-                    await expect(tacVesting.connect(user).withdrawUndelegated(receiverAddress, undelegateAmount + 1n))
+                    await expect(tacVesting.connect(user).withdrawFromAccount(receiverAddress, undelegateAmount + 1n))
                         .to.be.revertedWithCustomError(stakingAccountContract, "InsufficientBalance").withArgs(undelegateAmount, undelegateAmount + 1n);
 
                     // check that user can withdraw undelegated funds
                     const receiverBalanceBefore = await admin.provider.getBalance(receiverAddress);
-                    tx = await tacVesting.connect(user).withdrawUndelegated(receiverAddress, undelegateAmount);
-                    await expect(tx).to.emit(tacVesting, 'WithdrawnUndelegated').withArgs(userAddress, receiverAddress, undelegateAmount);
+                    tx = await tacVesting.connect(user).withdrawFromAccount(receiverAddress, undelegateAmount);
+                    await expect(tx).to.emit(tacVesting, 'WithdrawnFromAccount').withArgs(userAddress, receiverAddress, undelegateAmount);
                     const receiverBalanceAfter = await admin.provider.getBalance(receiverAddress);
                     expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + undelegateAmount);
                 } else { // user chose immediate withdraw
@@ -389,8 +390,8 @@ describe('TacVesting', function () {
 
                 // check that user can withdraw undelegated funds
                 const receiverBalanceBefore = await admin.provider.getBalance(receiverAddress);
-                tx = await tacVesting.connect(user).withdrawUndelegated(receiverAddress, availableToUndelegate);
-                await expect(tx).to.emit(tacVesting, 'WithdrawnUndelegated').withArgs(userAddress, receiverAddress, availableToUndelegate);
+                tx = await tacVesting.connect(user).withdrawFromAccount(receiverAddress, availableToUndelegate);
+                await expect(tx).to.emit(tacVesting, 'WithdrawnFromAccount').withArgs(userAddress, receiverAddress, availableToUndelegate);
                 const receiverBalanceAfter = await admin.provider.getBalance(receiverAddress);
                 expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + availableToUndelegate);
 

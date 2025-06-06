@@ -69,9 +69,9 @@ contract StakingAccount {
     /// @dev Function to withdraw rewards
     /// @param validatorAddress The address of the validator to withdraw rewards from.
     function withdrawRewards(
-        address payable to,
+        address to,
         string memory validatorAddress
-    ) external onlyVestingContract nonZeroAddress(to) {
+    ) external onlyVestingContract nonZeroAddress(to) returns (uint256) {
         // Withdraw the rewards from the validator
         Coin[] memory rewards = distributionContract.withdrawDelegatorRewards(address(this), validatorAddress);
 
@@ -82,6 +82,8 @@ contract StakingAccount {
                 revert FailedToSendFunds();
             }
         }
+
+        return rewards[0].amount;
     }
 
     /// @dev Function to undelegate tokens
@@ -98,7 +100,7 @@ contract StakingAccount {
 
     /// @dev Withdraw the undelegated tokens
     /// @param to The address to withdraw the undelegated tokens to.
-    function withdrawUndelegatedTokens(
+    function withdraw(
         address to,
         uint256 amount
     ) external onlyVestingContract nonZeroAddress(to) nonZeroAmount(amount) {

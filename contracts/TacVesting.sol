@@ -30,7 +30,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         int64 completionTime
     );
 
-    event WithdrawnUndelegated(
+    event WithdrawnFromAccount(
         address user,
         address to,
         uint256 amount
@@ -45,7 +45,8 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     event RewardsClaimed(
         address user,
         address to,
-        string validatorAddress
+        string validatorAddress,
+        uint256 rewardAmount
     );
 
     // === CONSTANTS ===
@@ -279,7 +280,7 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
     function claimDelegatorRewards(
         address to,
         string memory validatorAddress
-    ) external nonReentrant {
+    ) external nonReentrant returns (uint256 rewardAmount) {
         UserInfo storage userInfo = info[msg.sender];
         checkStaking(userInfo);
         require(to != address(0), "TacVesting: Cannot withdraw to zero address");
@@ -290,26 +291,26 @@ contract TacVesting is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuard
         }
 
         // Withdraw the rewards from the validator
-        userInfo.stakingAccount.withdrawRewards(payable(msg.sender), validatorAddress);
+        rewardAmount = userInfo.stakingAccount.withdrawRewards(to, validatorAddress);
 
-        emit RewardsClaimed(msg.sender, to, validatorAddress);
+        emit RewardsClaimed(msg.sender, to, validatorAddress, rewardAmount);
     }
 
-    /// @dev Withdraw undelegated tokens. Token withdrawal is possible only after the undelegation period is over.
-    /// Undelegated tokens just stored on staking account and can be withdrawn at any time.
-    /// @param to The address to withdraw the undelegated tokens to.
+    /// @dev Withdraw tokens from staking account. It's used to withdraw undelegated tokens and rewards.
+    /// Undelegation and rewards just stored on staking account and can be withdrawn at any time.
+    /// @param to The address to withdraw tokens to.
     /// @param amount The amount to withdraw.
-    function withdrawUndelegated(
+    function withdrawFromAccount(
         address to,
         uint256 amount
     ) external nonReentrant {
         UserInfo storage userInfo = info[msg.sender];
         checkStaking(userInfo);
         require(to != address(0), "TacVesting: Cannot withdraw to zero address");
-        // Withdraw the undelegated tokens
-        userInfo.stakingAccount.withdrawUndelegatedTokens(to, amount);
+        // Withdraw from staking account
+        userInfo.stakingAccount.withdraw(to, amount);
 
-        emit WithdrawnUndelegated(msg.sender, to, amount);
+        emit WithdrawnFromAccount(msg.sender, to, amount);
     }
 
     // == IMMEDIATE WITHDRAW ==
