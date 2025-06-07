@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 
 import { StakingI, STAKING_PRECOMPILE_ADDRESS } from "./precompiles/staking/StakingI.sol";
 import { DistributionI, DISTRIBUTION_PRECOMPILE_ADDRESS } from "./precompiles/distribution/DistributionI.sol";
-import { Coin } from "./precompiles/common/Types.sol";
+import { Coin, DecCoin } from "./precompiles/common/Types.sol";
 
 /// @title StakingAccount
 contract StakingAccount {
@@ -17,13 +17,14 @@ contract StakingAccount {
     error InsufficientBalance(uint256 balance, uint256 required);
     error FailedToSendFunds();
 
+    // === CONSTANTS ===
+
+    StakingI public constant stakingContract = StakingI(STAKING_PRECOMPILE_ADDRESS);
+    DistributionI public constant distributionContract = DistributionI(DISTRIBUTION_PRECOMPILE_ADDRESS);
+
     // === STATE VARIABLES ===
 
     address public vestingContract;
-
-    // TODO: remove from state and move to const variables
-    StakingI public constant stakingContract = StakingI(STAKING_PRECOMPILE_ADDRESS);
-    DistributionI public constant distributionContract = DistributionI(DISTRIBUTION_PRECOMPILE_ADDRESS);
 
     // === END OF STATE VARIABLES ===
 
@@ -72,11 +73,17 @@ contract StakingAccount {
         address to,
         string memory validatorAddress
     ) external onlyVestingContract nonZeroAddress(to) returns (uint256) {
+
+        // Check if the contract has active delegations
+        (, Coin memory balance) = stakingContract.delegation(address(this), validatorAddress);
+        if (balance.amount == 0) { // if no delegation found - just return 0
+            return 0;
+        }
         // Withdraw the rewards from the validator
         Coin[] memory rewards = distributionContract.withdrawDelegatorRewards(address(this), validatorAddress);
 
         if (rewards[0].amount > 0) {
-            // Transfer the rewards to the specified address
+            // Transfer rewards to the specified address
             (bool success, ) = to.call{ value: rewards[0].amount }("");
             if (!success) {
                 revert FailedToSendFunds();

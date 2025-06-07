@@ -2,6 +2,12 @@
 
 pragma solidity ^0.8.28;
 
+/// @dev Coin is a struct that represents a token with a denomination and an amount.
+struct Coin {
+    string denom;
+    uint256 amount;
+}
+
 contract StakingMock {
 
     uint64 public constant COMPLETION_TIMEOUT = 1 hours;
@@ -22,7 +28,7 @@ contract StakingMock {
     function getDelegation(
         address delegatorAddress,
         string memory validatorAddress
-    ) external view returns (Delegation memory delegation) {
+    ) external view returns (Delegation memory) {
         return delegations[delegatorAddress][validatorAddress];
     }
 
@@ -47,9 +53,9 @@ contract StakingMock {
         require(amount > 0, "Amount must be greater than zero");
         require(msg.value == amount, "Incorrect amount sent");
 
-        Delegation storage delegation = delegations[delegatorAddress][validatorAddress];
-        delegation.delegationTime = uint64(block.timestamp);
-        delegation.amount += amount;
+        Delegation storage _delegation = delegations[delegatorAddress][validatorAddress];
+        _delegation.delegationTime = uint64(block.timestamp);
+        _delegation.amount += amount;
 
         success = true;
     }
@@ -66,9 +72,9 @@ contract StakingMock {
         uint256 amount
     ) external returns (int64 completionTime) {
         require(amount > 0, "Amount must be greater than zero");
-        Delegation storage delegation = delegations[delegatorAddress][validatorAddress];
-        require(delegation.amount >= amount, "Insufficient delegation amount");
-        delegation.amount -= amount;
+        Delegation storage _delegation = delegations[delegatorAddress][validatorAddress];
+        require(_delegation.amount >= amount, "Insufficient delegation amount");
+        _delegation.amount -= amount;
         Undelegation storage undelegation = undelegations[delegatorAddress][uint64(block.timestamp)];
         undelegation.amount += amount;
         completionTime = int64(uint64(block.timestamp) + COMPLETION_TIMEOUT);
@@ -89,5 +95,19 @@ contract StakingMock {
         // Simulate sending the undelegated amount back to the delegator
         (bool success, ) = delegatorAddress.call{ value: amount }("");
         require(success, "Failed to send undelegated funds");
+    }
+
+
+    function delegation(
+        address delegatorAddress,
+        string memory validatorAddress
+    ) external view returns (uint256 shares, Coin memory balance) {
+        Delegation memory _delegation = delegations[delegatorAddress][validatorAddress];
+
+        shares = _delegation.amount; // In this mock, shares are equal to the amount
+        balance = Coin({
+            denom: "utac",
+            amount: _delegation.amount
+        });
     }
 }
