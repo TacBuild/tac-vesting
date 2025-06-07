@@ -14,7 +14,7 @@ import { GasConsumer } from "../../typechain-types";
 
 async function main() {
     // validator
-    const validatorAddress = "tacvaloper17saprlqvmefcwa8we2tmjajcketp3k2n6k3p80";
+    const validatorAddress = "tacvaloper1l9xzp9uqjl6dxpfe2mepnp446n7pep3lp6el69";
     const validatorPrivateKey = process.env.VALIDATOR_PRIVATE_KEY!;
     const validator = new ethers.Wallet(validatorPrivateKey, ethers.provider);
     // deployer
@@ -41,7 +41,7 @@ async function main() {
     const COMPLETION_TIMEOUT = 10n; // 10 seconds
 
     // generate user rewards
-    const usersCount = 10;
+    const usersCount = 5;
     const users: Signer[] = [];
     const rewards: RewardsConfig[] = [];
     let totalRewards = 0n;
@@ -240,7 +240,8 @@ async function main() {
                 let rec = await tx.wait();
                 const rewardsReceiverBalanceAfter = await deployer.provider!.getBalance(rewardsReceiverAddress);
                 console.log(`Rewards received: ${ethers.formatEther(rewardsReceiverBalanceAfter - rewardsReceiverBalanceBefore)} TAC`);
-
+                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
+                console.log(`Staking account balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
                 // check unlocked
                 let expectedUnlocked;
                 if (step === VESTING_STEPS) {
@@ -282,6 +283,8 @@ async function main() {
                 expect(eventFound, "Undelegated event should be emitted").to.be.true;
 
                 withdraws[userAddress] += availableToUndelegate;
+                const stakingAccountBalanceAfter = await deployer.provider!.getBalance(userInfo.stakingAccount);
+                console.log(`Staking account balance after undelegation: ${ethers.formatEther(stakingAccountBalanceAfter)} TAC`);
             } else { // if choosen immediate withdraw
                 // check unlocked: first transfer + (total - first) * step / VESTING_STEPS
                 const firstTransfer = (userReward.rewardAmount * IMMEDIATE_PCT) / BASIS_POINTS;
@@ -325,6 +328,26 @@ async function main() {
         }
     }
 
+    // try receive rewards for unbonding delegations
+    console.log("Trying to receive delegator rewards for unbonding delegations...");
+    for (let i = 0; i < usersCount; i++) {
+        const user = users[i];
+        const userAddress = await user.getAddress();
+        const userInfo = await tacVesting.info(userAddress);
+        if (userInfo.stakingAccount === ethers.ZeroAddress) {
+            continue; // no staking account, skip
+        }
+
+        console.log(`User ${i + 1}/${usersCount}: ${userAddress}`);
+
+        // try receive rewards
+        const rewardsReceiverBalanceBefore = await deployer.provider!.getBalance(rewardsReceiverAddress);
+        let tx = await tacVesting.connect(user).claimDelegatorRewards(rewardsReceiverAddress, validatorAddress, {gasLimit: 1000000});
+        let rec = await tx.wait();
+        const rewardsReceiverBalanceAfter = await deployer.provider!.getBalance(rewardsReceiverAddress);
+        console.log(`Rewards received: ${ethers.formatEther(rewardsReceiverBalanceAfter - rewardsReceiverBalanceBefore)} TAC`);
+    }
+
     // try receive undelegated funds
     while (true) {
         let allDone = true;
@@ -332,6 +355,7 @@ async function main() {
             const currBlockTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
             const user = users[i];
             const userAddress = await user.getAddress();
+            const userInfo = await tacVesting.info(userAddress);
 
             if (!undelegations[userAddress]) {
                 continue; // no undelegations for this user
@@ -340,17 +364,19 @@ async function main() {
             console.log(`Checking undelegations for user ${userAddress}`);
 
             for (let undelegation of undelegations[userAddress]) {
-                console.log(`Undelegation: done ${undelegation.done}, amount ${ethers.formatEther(undelegation.amount)}, completion time ${undelegation.completionTime}`);
+                console.log(`Undelegation: done ${undelegation.done}, amount ${ethers.formatEther(undelegation.amount)}, completion time ${undelegation.completionTime}, curr block timestamp ${currBlockTimestamp}`);
                 if (undelegation.done) {
                     continue; // already done
                 }
 
-                // check if undelegation (+10 sec) is completed
-                if (currBlockTimestamp + 10n < undelegation.completionTime) {
+                // check if undelegation is completed (+20s)
+                if (currBlockTimestamp < undelegation.completionTime + 20n) {
                     continue; // not completed yet
                 }
 
-                console.log(`User ${userAddress} has undelegated funds to receive: ${ethers.formatEther(undelegation.amount)} TAC`);
+                console.log(`User ${i + 1}/${usersCount} ${userAddress} has undelegated funds to receive: ${ethers.formatEther(undelegation.amount)} TAC`);
+                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
+                console.log(`Staking account(${userInfo.stakingAccount}) balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
 
                 // try receive undelegated funds
                 const receiverBalanceBefore = await deployer.provider!.getBalance(receiverAddress);
@@ -390,6 +416,7 @@ async function main() {
 
     const tacVestingBalance = await deployer.provider!.getBalance(tacVesting.getAddress());
     const receiverBalance = await deployer.provider!.getBalance(receiverAddress);
+    const rewardsReceiverBalance = await deployer.provider!.getBalance(rewardsReceiverAddress);
     for (let i = 0; i < usersCount; i++) {
         const user = users[i];
         const userAddress = await user.getAddress();
@@ -402,6 +429,7 @@ async function main() {
     console.log(`TacVesting contract balance: ${tacVestingBalance} TAC`);
     console.log(`Receiver balance: ${receiverBalance} TAC`);
     console.log(`Total rewards: ${totalRewards} TAC`);
+    console.log(`Rewards receiver balance: ${rewardsReceiverBalance} TAC`);
 }
 
 main();
