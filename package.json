@@ -44,6 +44,7 @@
     "hardhat-storage-layout": "^0.1.7",
     "inquirer": "^8.0.0",
     "inquirer-autocomplete-prompt": "2.0.0",
-    "solidity-coverage": "^0.8.13"
+    "solidity-coverage": "^0.8.13",
+    "@tonappchain/evm-ccl": "0.9.22"
   }
 }
