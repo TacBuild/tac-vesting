@@ -8,9 +8,13 @@ import { StakingMock } from "../mock/StakingMock.sol";
 contract StakingAccountTest is StakingAccount {
     // redeclare delegate function for call staking mock payable function
     function delegate(
-        string memory validatorAddress
-    ) external override payable onlyVestingContract nonZeroAmount(msg.value) {
+        string calldata _validatorAddress
+    ) external override payable onlyVestingContract nonZeroAmount(msg.value) returns(bool) {
         // Delegate the tokens to the validator
-        StakingMock(address(stakingContract)).delegate{ value: msg.value }(address(this), validatorAddress, msg.value);
+        if (bytes(validatorAddress).length > 0) {
+            revert DelegationWasMade();
+        }
+        validatorAddress = _validatorAddress;
+        return StakingMock(address(stakingContract)).delegate{ value: msg.value }(address(this), _validatorAddress, msg.value);
     }
 }

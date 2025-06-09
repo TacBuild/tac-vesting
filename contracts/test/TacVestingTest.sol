@@ -4,45 +4,41 @@ pragma solidity ^0.8.28;
 
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
+import { TacHeaderV1 } from "@tonappchain/evm-ccl/contracts/core/Structs.sol";
+
 import { TacVesting } from "../TacVesting.sol";
 import { StakingAccountTest } from "./StakingAccountTest.sol";
 
 contract TacVestingTest is TacVesting {
-    function initialize(
-        address _adminAddress,
-        uint256 _stepDuration
-    ) override initializer public {
-         require(_adminAddress != address(0), "TacVesting: Admin address cannot be zero");
-        __UUPSUpgradeable_init();
-        __Ownable_init(_adminAddress);
-        __ReentrancyGuard_init();
 
-        stepDuration = _stepDuration;
-    }
-
-    // redeclare chooseStaking for deploy test staking account
+    /// @dev Function to create delegation instead immediate withdraw.
+    /// @param _tacHeader The TAC header.
+    /// @param _params The encoded ChooseStakingParams struct.
     function chooseStaking(
-        string memory validatorAddress,
-        uint256 userTotalRewards,
-        bytes32[] calldata merkleProof
-    ) external override {
-        checkProof(msg.sender, userTotalRewards, merkleProof);
+        bytes calldata _tacHeader,
+        bytes calldata _params
+    ) external override _onlyCrossChainLayer {
 
-        UserInfo storage userInfo = info[msg.sender];
-        checkNoChoice(userInfo);
+        TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
+        ChooseStakingParams memory params = abi.decode(_params, (ChooseStakingParams));
+
+        _checkProof(tacHeader.tvmCaller, params.userTotalRewards, params.merkleProof);
+
+        UserInfo storage userInfo = info[tacHeader.tvmCaller];
+        _checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
-        userInfo.userTotalRewards = userTotalRewards;
+        userInfo.userTotalRewards = params.userTotalRewards;
         userInfo.stakingAccount = StakingAccountTest(payable(Create2.deploy(
             0,
-            keccak256(abi.encode(msg.sender)),
+            keccak256(abi.encode(tacHeader.tvmCaller)),
             type(StakingAccountTest).creationCode
         )));
-        if (address(userInfo.stakingAccount) == address(0)) {
-            revert("TacVesting: Failed to create StakingAccount");
-        }
-        // Delegate the tokens to the validator
-        userInfo.stakingAccount.delegate{value: userTotalRewards}(validatorAddress);
+        require(address(userInfo.stakingAccount) != address(0), "TacVesting: Failed to create StakingAccount");
 
-        emit Delegated(msg.sender, validatorAddress, userTotalRewards);
+        // Delegate the tokens to the validator
+        bool success = userInfo.stakingAccount.delegate{value: params.userTotalRewards}(params.validatorAddress);
+        require(success, "TacVesting: Failed to delegate tokens");
+
+        emit Delegated(tacHeader.tvmCaller, params.validatorAddress, params.userTotalRewards);
     }
 }
