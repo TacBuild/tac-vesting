@@ -4,13 +4,13 @@ import { ethers, keccak256 } from 'ethers';
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
 export type RewardsConfig = {
-    userAddress: string;
+    userTVMAddress: string;
     rewardAmount: bigint;
 };
 
 export function createLeaf(reward: RewardsConfig): string {
-    // Encode the user address and reward amount into a leaf
-    return keccak256(keccak256(abiCoder.encode(['address', 'uint256'], [reward.userAddress, reward.rewardAmount])));
+    // Encode the user's tvm address and reward amount into a leaf
+    return keccak256(abiCoder.encode(['string', 'uint256'], [reward.userTVMAddress, reward.rewardAmount]));
 }
 
 export function createRewardsMerkleTree(rewards: RewardsConfig[]): MerkleTree {
