@@ -339,9 +339,8 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         _checkStaking(userInfo);
         // Withdraw from staking account
         uint256 amount = userInfo.stakingAccount.withdraw();
-
         // send tokens to TON user
-        _bridgeToTon(tacHeader, amount);
+        if (amount > 0) _bridgeToTon(tacHeader, amount);
 
         emit WithdrawnFromAccount(tacHeader.tvmCaller, amount);
     }
