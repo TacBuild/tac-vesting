@@ -46,6 +46,7 @@
     "inquirer-autocomplete-prompt": "2.0.0",
     "solidity-coverage": "^0.8.13",
     "@tonappchain/evm-ccl": "0.9.22",
-    "@tonappchain/sdk": "0.6.4"
+    "@tonappchain/sdk": "0.6.4",
+    "@ton/ton": "15.2.1"
   }
 }
