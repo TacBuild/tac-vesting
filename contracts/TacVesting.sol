@@ -81,9 +81,9 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     ) public initializer virtual { // TODO: remove virtual modifier
         require(_adminAddress != address(0), "TacVesting: Admin address cannot be zero");
         __UUPSUpgradeable_init();
+        __TacProxyV1Upgradeable_init(crossChainLayer);
         __Ownable_init(_adminAddress);
         __ReentrancyGuard_init();
-        __TacProxyV1Upgradeable_init(crossChainLayer);
 
         stepDuration = _stepDuration;
     }
