@@ -14,8 +14,8 @@ export const testnetConfig: DeployConfig = {
 };
 
 export const localConfig: DeployConfig = {
-    crossChainLayerAddress: "0x",
-    stepDuration: 60n * 1n, // 1 mins
+    crossChainLayerAddress: "0xE69c2c0394325667E980f8699977d887DE4e3398",
+    stepDuration: 60n * 7n, // 7 mins
 };
 
 export const StakingPrecompileAddress = "0x0000000000000000000000000000000000000800";

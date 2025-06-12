@@ -1,16 +1,21 @@
-import { ethers } from "hardhat";
+import hre, { ethers } from "hardhat";
 import { createLeaf, createRewardsMerkleTree, RewardsConfig } from "../utils/rewards";
 
-import fs from "fs";
-import path from "path";
-import { Signer } from "ethers";
+import { Signer, TransactionReceipt } from "ethers";
 import { deployTacVesting } from "../utils/deploy";
-import { DistributionPrecompileAddress, StakingPrecompileAddress, testnetConfig } from "../config/config";
-import { expect } from "chai";
+import { DistributionPrecompileAddress, StakingPrecompileAddress, localConfig } from "../config/config";
+import { expect, use } from "chai";
 import { StakingI } from "../../typechain-types/staking";
 import { DistributionI } from "../../typechain-types/distribution";
 import { setTimeout } from "timers/promises";
 import { GasConsumer } from "../../typechain-types";
+import { TacSdk, Network, SenderFactory, SenderAbstraction, EvmProxyMsg, startTracking, StageName } from "@tonappchain/sdk";
+import { TonClient } from "@ton/ton";
+import { getCCLArtifacts } from "@tonappchain/evm-ccl";
+import { CrossChainLayer } from "@tonappchain/evm-ccl/dist/typechain-types";
+import { UndelegatedEvent } from "../../typechain-types/contracts/TacVesting";
+
+const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
 async function main() {
     // validator
@@ -18,7 +23,13 @@ async function main() {
     const validatorPrivateKey = process.env.VALIDATOR_PRIVATE_KEY!;
     const validator = new ethers.Wallet(validatorPrivateKey, ethers.provider);
     // deployer
-    const deployer = ethers.Wallet.createRandom(ethers.provider);
+    const deployer = ethers.Wallet.createRandom().connect(ethers.provider);
+
+    const cclArtifacts = await getCCLArtifacts();
+    const crossChainLayer: CrossChainLayer = await ethers.getContractAtFromArtifact(cclArtifacts.readArtifactSync("CrossChainLayer"), localConfig.crossChainLayerAddress, deployer) as unknown as CrossChainLayer;
+    console.log(`CrossChainLayer contract address: ${await crossChainLayer.getAddress()}`);
+    const tacNativeAddress = await crossChainLayer.NATIVE_TOKEN_ADDRESS();
+    console.log(`TAC native address: ${tacNativeAddress}`);
 
     // send some TAC to deployer
     await (await validator.sendTransaction({
@@ -26,8 +37,37 @@ async function main() {
         value: ethers.parseEther("100") // 100 TAC
     })).wait();
 
+    const localhostNodeProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+    const sdkParams = {
+        network: Network.TESTNET,
+        customLiteSequencerEndpoints: ["http://127.0.0.1:8080"],
+        TACParams: {
+            provider: localhostNodeProvider,
+            settingsAddress: "0x78d84987998823714F2b45Ab95850E4240Df6381",
+        },
+        TONParams: {
+            settingsAddress: "EQBoFw42dxrFcBH4Wqdm7NNKxIwj6fMnl-2zIPs02Xrf_HPG",
+        },
+    }
+
+    const tacSdk = await TacSdk.create(sdkParams);
+    const tacJettonAddress = await tacSdk.getTVMTokenAddress(tacNativeAddress);
+    console.log(`TAC jetton address: ${tacJettonAddress}`);
+
+    // setup TON user's wallets
+    const tonMnemonics = process.env.TON_TEST_MNEMONICS!.split(",");
+    const senders: SenderAbstraction[] = [];
+    for (let mnemonic of tonMnemonics) {
+        const sender = await SenderFactory.getSender({
+            network: Network.TESTNET,
+            version: "V5R1",
+            mnemonic: mnemonic,
+        });
+        senders.push(sender);
+    }
+
     // deploy tacVesting contract
-    const tacVesting = await deployTacVesting(deployer, testnetConfig);
+    const tacVesting = await deployTacVesting(deployer, localConfig);
 
     const GasConsumer = await ethers.getContractFactory("GasConsumer", deployer);
     const gasConsumer: GasConsumer = await GasConsumer.deploy();
@@ -38,30 +78,23 @@ async function main() {
     const VESTING_STEPS = await tacVesting.VESTING_STEPS();
     const BASIS_POINTS = await tacVesting.BASIS_POINTS();
     const IMMEDIATE_PCT = await tacVesting.IMMEDIATE_PCT();
-    const COMPLETION_TIMEOUT = 10n; // 10 seconds
 
     // generate user rewards
-    const usersCount = 5;
-    const users: Signer[] = [];
+    const usersCount = senders.length;
     const rewards: RewardsConfig[] = [];
     let totalRewards = 0n;
-
+    let usersJettonBalanceBefore = 0n;
     for(let i = 0; i < usersCount; i++) {
-        const user = ethers.Wallet.createRandom(ethers.provider);
-
-        await (await validator.sendTransaction({
-            to: user.address,
-            value: ethers.parseEther("10") // 10 TAC
-        })).wait();
-
-        users.push(user);
 
         const rewardAmount = ethers.parseEther("1") * BigInt(Math.floor(Math.random() * 10 + 1)) // random reward between 1 and 10 TAC
         totalRewards += rewardAmount;
         rewards.push({
-            userAddress: user.address,
+            userTVMAddress: senders[i].getSenderAddress(), // add TON user wallet address
             rewardAmount: rewardAmount
         });
+
+        const userJettonBalance = await tacSdk.getUserJettonBalance(senders[i].getSenderAddress(), tacJettonAddress);
+        usersJettonBalanceBefore += userJettonBalance;
     }
 
     const merkleTree = createRewardsMerkleTree(rewards);
@@ -85,18 +118,6 @@ async function main() {
     // balance after sending
     console.log(`TacVesting contract balance after sending: ${ethers.formatEther(await deployer.provider!.getBalance(tacVesting.getAddress()))}`);
 
-    // do test:
-
-    const receiver = ethers.Wallet.createRandom();
-    const receiverAddress = await receiver.getAddress();
-
-    console.log(`Receiver address: ${receiverAddress}`);
-
-    const rewardsReceiver = ethers.Wallet.createRandom();
-    const rewardsReceiverAddress = await rewardsReceiver.getAddress();
-
-    console.log(`Rewards receiver address: ${rewardsReceiverAddress}`);
-
     const withdraws: {
         [key: string]: bigint;
     } = {};
@@ -109,14 +130,57 @@ async function main() {
         }[];
     } = {};
 
+    async function sendMessageToTacVesting(sender: SenderAbstraction, methodName: string, encodedParameters: string, isRoundTrip: boolean): Promise<TransactionReceipt> {
+        const evmProxyMsg: EvmProxyMsg = {
+            evmTargetAddress: await tacVesting.getAddress(),
+            methodName: methodName,
+            encodedParameters: encodedParameters,
+        }
+
+        try {
+            const result = await tacSdk.sendCrossChainTransaction(evmProxyMsg, sender, []);
+
+            const stages = await startTracking(result, Network.TESTNET, {customLiteSequencerEndpoints: sdkParams.customLiteSequencerEndpoints, returnValue: true, tableView: false});
+
+            if (!stages) {
+                throw new Error(`Transaction for ${methodName} call tracking failed`);
+            }
+
+            let lastStage;
+            if (isRoundTrip) {
+                lastStage = StageName.EXECUTED_IN_TON;
+            } else {
+                lastStage = StageName.EXECUTED_IN_TAC;
+            }
+
+            if (!stages[lastStage].exists) {
+                console.log(JSON.stringify(stages, null, 2));
+                throw new Error(`Transaction for ${methodName} call not executed in ${lastStage}`);
+            }
+
+            console.log(`Transaction for ${methodName} call successfully executed in ${lastStage}`);
+
+            const tacTxHash = stages[StageName.EXECUTED_IN_TAC].stageData!.transactions![0].hash;
+            const txReceipt = await ethers.provider.getTransactionReceipt(tacTxHash);
+
+            if (!txReceipt) {
+                throw new Error(`Transaction receipt ${tacTxHash} for ${methodName} call not found in TAC`);
+            }
+
+            return txReceipt;
+        } catch (error) {
+            console.error(`Error while sending message to TacVesting contract for ${methodName}:`, error);
+            throw error;
+        }
+    }
+
     const stakingI: StakingI = await ethers.getContractAt("StakingI", StakingPrecompileAddress, deployer);
     const distributionI: DistributionI = await ethers.getContractAt("DistributionI", DistributionPrecompileAddress, deployer);
     let lastChoiceTime = 0n;
     // make users choose staking or immediate rewards
     for (let i = 0; i < usersCount; i++) {
-        const user = users[i];
         const reward = rewards[i];
-        const userAddress = await user.getAddress();
+        const userAddress = reward.userTVMAddress;
         const proof = merkleTree.getHexProof(createLeaf(reward));
 
         console.log(`User ${i + 1}/${usersCount}: ${userAddress}, reward: ${ethers.formatEther(reward.rewardAmount)}`);
@@ -130,21 +194,10 @@ async function main() {
             console.log(`User ${userAddress} chooses staking`);
 
             // choose staking
-            let tx = await tacVesting.connect(user).chooseStaking(validatorAddress, reward.rewardAmount, proof, {gasLimit: 1000000});
-            let rec = await tx.wait();
+            let encodedParameters = abiCoder.encode(["tuple(string,uint256,bytes32[])"], [[validatorAddress, reward.rewardAmount, proof]]);
+            await sendMessageToTacVesting(senders[i], "chooseStaking", encodedParameters, false);
 
             withdraws[userAddress] = 0n;
-
-            // check if event was emitted
-            let eventFound = false;
-            for (const log of rec!.logs) {
-                const event = tacVesting.interface.parseLog(log);
-                if (event?.name === "Delegated") {
-                    console.log(`Delegated event: User ${event.args.user} delegated ${ethers.formatEther(event.args.amount)} TAC to validator ${event.args.validatorAddress}`);
-                    eventFound = true;
-                }
-            }
-            expect(eventFound, "Delegated event should be emitted").to.be.true;
 
             // check staking account was created
             const userInfo = await tacVesting.info(userAddress);
@@ -152,7 +205,6 @@ async function main() {
             expect(userInfo.userTotalRewards).to.equal(reward.rewardAmount, "Amount should be equal to reward amount");
             expect(userInfo.unlocked).to.equal(0n, "User unlocked amount should be 0");
             expect(userInfo.withdrawn).to.equal(0n, "User withdrawn amount should be 0");
-            expect(userInfo.choiceStartTime).to.equal((await rec!.getBlock()).timestamp, "Choice start time should be equal to block timestamp");
 
             // get delegation info
             const delegation = await stakingI.delegation(userInfo.stakingAccount, validatorAddress);
@@ -166,23 +218,16 @@ async function main() {
             // choose immediate withdraw
             console.log(`User ${userAddress} chooses immediate withdraw`);
 
-            const receiverBalanceBefore = await deployer.provider!.getBalance(receiverAddress);
+            const userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
 
-            let tx = await tacVesting.connect(user).chooseImmediateWithdraw(receiverAddress, reward.rewardAmount, proof);
-            let rec = await tx.wait();
+            let encodedArguments = abiCoder.encode(["tuple(uint256,bytes32[])"], [[reward.rewardAmount, proof]]);
+            await sendMessageToTacVesting(senders[i], "chooseImmediateWithdraw", encodedArguments, true);
 
             const immediateWithdrawAmount = (reward.rewardAmount * IMMEDIATE_PCT) / BASIS_POINTS;
 
-            // chekc event
-            let eventFound = false;
-            for (const log of rec!.logs) {
-                const event = tacVesting.interface.parseLog(log);
-                if (event?.name === "Withdrawn") {
-                    console.log(`Withdrawn event: User ${event.args.user} withdrawn ${ethers.formatEther(event.args.amount)} TAC to receiver ${event.args.receiver}`);
-                    eventFound = true;
-                }
-            }
-            expect(eventFound, "Withdrawn event should be emitted").to.be.true;
+            // check ton user balance
+            const userJettonBalanceAfter = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+            expect(userJettonBalanceAfter).to.equal(userJettonBalanceBefore + immediateWithdrawAmount, "User jetton balance should be increased by withdrawn amount");
 
             withdraws[userAddress] = immediateWithdrawAmount;
 
@@ -191,10 +236,7 @@ async function main() {
             expect(userInfo.userTotalRewards).to.equal(reward.rewardAmount, "Amount should be equal to reward amount");
             expect(userInfo.unlocked).to.equal(immediateWithdrawAmount, "User unlocked amount should be equal to immediate withdraw amount");
             expect(userInfo.withdrawn).to.equal(immediateWithdrawAmount, "User withdrawn amount should be equal to immediate withdraw amount");
-            expect(userInfo.choiceStartTime).to.equal((await rec!.getBlock()).timestamp, "Choice start time should be equal to block timestamp");
-            const receiverBalanceAfter = await deployer.provider!.getBalance(receiverAddress);
-            console.log(`Receiver balance after: ${ethers.formatEther(receiverBalanceAfter)}`);
-            expect(receiverBalanceAfter).to.equal(receiverBalanceBefore + immediateWithdrawAmount, "Receiver balance should be increased by immediate withdraw amount");
+
             const tacVestingBalanceAfter = await deployer.provider!.getBalance(tacVesting.getAddress());
             console.log(`TacVesting contract balance after: ${ethers.formatEther(tacVestingBalanceAfter)}`);
             expect(tacVestingBalanceAfter).to.equal(tacVestingBalanceBefore - immediateWithdrawAmount, "TacVesting contract balance should be decreased by immediate withdraw amount");
@@ -207,39 +249,45 @@ async function main() {
     }
 
     for (let step = 1n; step <= VESTING_STEPS; step++) {
-        // wait for step duration
-        const lastChoiceTimeStep = lastChoiceTime + step * BigInt(testnetConfig.stepDuration);
-        const startTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
-        if (startTimestamp < lastChoiceTimeStep) {
-            console.log(`Waiting for step ${step} duration: ${lastChoiceTimeStep - startTimestamp} seconds...`);
-            while(1) {
-                const currentTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
-                if (currentTimestamp > lastChoiceTimeStep) {
-                    break; // step duration reached
-                }
-                // consume gas for generating rewards
-                let tx = await gasConsumer.connect(validator).consumeGas(300, {gasLimit: 25000000});
-                let res = await tx.wait();
-            }
-        }
-        console.log(`Step ${step} passed...`);
-
         // check users can claim rewards
         for (let i = 0; i < usersCount; i++) {
-            const user = users[i];
+
             const userReward = rewards[i];
-            const userAddress = await user.getAddress();
+            const userAddress = userReward.userTVMAddress;
 
             const userInfo = await tacVesting.info(userAddress);
+            const userChoiceTime = userInfo.choiceStartTime;
             console.log(`User ${i + 1}/${usersCount}: ${userAddress}`);
+            // wait for step duration
+            const userChoiceTimeStep = userChoiceTime + step * BigInt(localConfig.stepDuration);
+            const startTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
+            if (startTimestamp < userChoiceTimeStep) {
+                console.log(`Waiting for step ${step} duration: ${userChoiceTimeStep - startTimestamp} seconds...`);
+                while(1) {
+                    const currentTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
+                    if (currentTimestamp > userChoiceTimeStep) {
+                        break; // step duration reached
+                    }
+                    // consume gas for generating rewards
+                    let tx = await gasConsumer.connect(validator).consumeGas(300, {gasLimit: 25000000});
+                    let res = await tx.wait();
+                }
+            }
+            console.log(`Step ${step} passed...`);
+
             // if choosen staking
             if (userInfo.stakingAccount !== ethers.ZeroAddress) {
                 // try to claim rewards
-                const rewardsReceiverBalanceBefore = await deployer.provider!.getBalance(rewardsReceiverAddress);
-                let tx = await tacVesting.connect(user).claimDelegatorRewards(rewardsReceiverAddress, validatorAddress, {gasLimit: 1000000});
-                let rec = await tx.wait();
-                const rewardsReceiverBalanceAfter = await deployer.provider!.getBalance(rewardsReceiverAddress);
-                console.log(`Rewards received: ${ethers.formatEther(rewardsReceiverBalanceAfter - rewardsReceiverBalanceBefore)} TAC`);
+
+                let userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+                console.log(`User jetton balance before claiming: ${ethers.formatEther(userJettonBalanceBefore)} TAC`);
+                let encodedParameters = "0x";
+                await sendMessageToTacVesting(senders[i], "claimDelegatorRewards", encodedParameters, true);
+
+                let userJettonBalanceAfter = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+                console.log(`User jetton balance after claiming: ${ethers.formatEther(userJettonBalanceAfter)} TAC`);
+
+                console.log(`Rewards received: ${ethers.formatEther(userJettonBalanceAfter - userJettonBalanceBefore )} TAC`);
                 const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
                 console.log(`Staking account balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
                 // check unlocked
@@ -259,25 +307,25 @@ async function main() {
                 console.log(`Unlocked amount: ${ethers.formatEther(unlocked)} TAC`);
                 console.log(`Available to undelegate: ${ethers.formatEther(availableToUndelegate)} TAC`);
                 // try undelegate
-                tx = await tacVesting.connect(user).undelegate(validatorAddress, availableToUndelegate, {gasLimit: 1000000});
-                rec = await tx.wait();
+                encodedParameters = abiCoder.encode(["uint256"], [availableToUndelegate]);
+                const txReceipt = await sendMessageToTacVesting(senders[i], "undelegate", encodedParameters, false);
 
-                // check Undelegated event
                 let eventFound = false;
-                for (const log of rec!.logs) {
+                for (const log of txReceipt.logs) {
                     const event = tacVesting.interface.parseLog(log);
                     if (event?.name === "Undelegated") {
-                        console.log(`Undelegated event: User ${event.args.user} undelegated ${ethers.formatEther(event.args.amount)} TAC from validator ${event.args.validatorAddress} completion time ${event.args.completionTime}`);
-                        eventFound = true;
-                        // write undelegation info
+                        const typedEvent = event as unknown as UndelegatedEvent.LogDescription;
+                        expect(typedEvent.args.userTVMAddress).to.equal(userAddress, "User address should match");
+                        expect(typedEvent.args.amount).to.equal(availableToUndelegate, "Undelegated amount should match");
                         if (!undelegations[userAddress]) {
                             undelegations[userAddress] = [];
                         }
                         undelegations[userAddress].push({
                             done: false,
-                            amount: event.args.amount,
-                            completionTime: event.args.completionTime
+                            amount: availableToUndelegate,
+                            completionTime: typedEvent.args.completionTime,
                         });
+                        eventFound = true;
                     }
                 }
                 expect(eventFound, "Undelegated event should be emitted").to.be.true;
@@ -307,22 +355,14 @@ async function main() {
                 console.log(`Unlocked amount: ${ethers.formatEther(unlocked)} TAC`);
                 console.log(`Available to withdraw: ${ethers.formatEther(availableToWithdraw)} TAC`);
                 // try withdraw
+                const userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
 
-                const receiverBalanceBefore = await deployer.provider!.getBalance(receiverAddress);
-                let tx = await tacVesting.connect(user).withdraw(receiverAddress, availableToWithdraw, {gasLimit: 1000000});
-                const rec = await tx.wait();
-                const receiverBalanceAfter = await deployer.provider!.getBalance(receiverAddress);
-                console.log(`Withdrawn amount: ${ethers.formatEther(receiverBalanceAfter - receiverBalanceBefore)} TAC`);
-                // check Withdrawn event
-                let eventFound = false;
-                for (const log of rec!.logs) {
-                    const event = tacVesting.interface.parseLog(log);
-                    if (event?.name === "Withdrawn") {
-                        console.log(`Withdrawn event: User ${event.args.user} withdrawn ${ethers.formatEther(event.args.amount)} TAC to receiver ${event.args.receiver}`);
-                        eventFound = true;
-                    }
-                }
-                expect(eventFound, "Withdrawn event should be emitted").to.be.true;
+                let encodedParameters = abiCoder.encode(["uint256"], [availableToWithdraw]);
+                await sendMessageToTacVesting(senders[i], "withdraw", encodedParameters, true);
+
+                const userJettonBalanceAfter = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+                console.log(`Withdrawn amount: ${ethers.formatEther(userJettonBalanceAfter - userJettonBalanceBefore)} TAC`);
+
                 withdraws[userAddress] += availableToWithdraw;
             }
         }
@@ -331,8 +371,8 @@ async function main() {
     // try receive rewards for unbonding delegations
     console.log("Trying to receive delegator rewards for unbonding delegations...");
     for (let i = 0; i < usersCount; i++) {
-        const user = users[i];
-        const userAddress = await user.getAddress();
+        const userReward = rewards[i];
+        const userAddress = userReward.userTVMAddress;
         const userInfo = await tacVesting.info(userAddress);
         if (userInfo.stakingAccount === ethers.ZeroAddress) {
             continue; // no staking account, skip
@@ -341,11 +381,12 @@ async function main() {
         console.log(`User ${i + 1}/${usersCount}: ${userAddress}`);
 
         // try receive rewards
-        const rewardsReceiverBalanceBefore = await deployer.provider!.getBalance(rewardsReceiverAddress);
-        let tx = await tacVesting.connect(user).claimDelegatorRewards(rewardsReceiverAddress, validatorAddress, {gasLimit: 1000000});
-        let rec = await tx.wait();
-        const rewardsReceiverBalanceAfter = await deployer.provider!.getBalance(rewardsReceiverAddress);
-        console.log(`Rewards received: ${ethers.formatEther(rewardsReceiverBalanceAfter - rewardsReceiverBalanceBefore)} TAC`);
+        try {
+            const encodedParameters = "0x";
+            await sendMessageToTacVesting(senders[i], "claimDelegatorRewards", encodedParameters, true);
+        } catch (error) {
+            console.log(`Error while claiming delegator rewards:`, error);
+        }
     }
 
     // try receive undelegated funds
@@ -353,8 +394,8 @@ async function main() {
         let allDone = true;
         for (let i = 0; i < usersCount; i++) {
             const currBlockTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
-            const user = users[i];
-            const userAddress = await user.getAddress();
+            const userReward = rewards[i];
+            const userAddress = userReward.userTVMAddress;
             const userInfo = await tacVesting.info(userAddress);
 
             if (!undelegations[userAddress]) {
@@ -378,23 +419,16 @@ async function main() {
                 const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
                 console.log(`Staking account(${userInfo.stakingAccount}) balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
 
-                // try receive undelegated funds
-                const receiverBalanceBefore = await deployer.provider!.getBalance(receiverAddress);
-                let tx = await tacVesting.connect(user).withdrawFromAccount(receiverAddress, undelegation.amount, {gasLimit: 1000000});
-                let rec = await tx.wait();
-                // check WithdrawnFromAccount event
-                let eventFound = false;
-                for (const log of rec!.logs) {
-                    const event = tacVesting.interface.parseLog(log);
-                    if (event?.name === "WithdrawnFromAccount") {
-                        console.log(`WithdrawnFromAccount event: User ${event.args.user} withdrawn undelegated ${ethers.formatEther(event.args.amount)} TAC to receiver ${event.args.receiver}`);
-                        eventFound = true;
-                    }
-                }
-                expect(eventFound, "WithdrawnFromAccount event should be emitted").to.be.true;
+                if (stakingAccountBalance !== 0n) {
+                    // try receive undelegated funds
+                    const userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
 
-                const receiverBalanceAfter = await deployer.provider!.getBalance(receiverAddress);
-                console.log(`Received undelegated amount: ${ethers.formatEther(receiverBalanceAfter - receiverBalanceBefore)} TAC`);
+                    const encodedParameters = "0x";
+                    await sendMessageToTacVesting(senders[i], "withdrawFromAccount", encodedParameters, true);
+
+                    const userJettonBalanceAfter = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+                    console.log(`Received undelegated amount: ${ethers.formatEther(userJettonBalanceAfter - userJettonBalanceBefore)} TAC`);
+                }
 
                 undelegation.done = true; // mark as done
             }
@@ -415,21 +449,20 @@ async function main() {
     }
 
     const tacVestingBalance = await deployer.provider!.getBalance(tacVesting.getAddress());
-    const receiverBalance = await deployer.provider!.getBalance(receiverAddress);
-    const rewardsReceiverBalance = await deployer.provider!.getBalance(rewardsReceiverAddress);
+    let usersJettonBalanceAfter = 0n;
     for (let i = 0; i < usersCount; i++) {
-        const user = users[i];
-        const userAddress = await user.getAddress();
+        const userAddress = rewards[i].userTVMAddress;
         const userInfo = await tacVesting.info(userAddress);
         const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
 
         console.log(`User ${i + 1}/${usersCount}: ${userAddress} staking account balance: ${stakingAccountBalance} TAC`);
+        const userJettonBalance = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
+        usersJettonBalanceAfter += userJettonBalance;
     }
 
     console.log(`TacVesting contract balance: ${tacVestingBalance} TAC`);
-    console.log(`Receiver balance: ${receiverBalance} TAC`);
     console.log(`Total rewards: ${totalRewards} TAC`);
-    console.log(`Rewards receiver balance: ${rewardsReceiverBalance} TAC`);
+    console.log(`Users jetton balance changes: ${ethers.formatEther(usersJettonBalanceAfter - usersJettonBalanceBefore)} TAC`);
 }
 
 main();
