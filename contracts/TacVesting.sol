@@ -5,7 +5,6 @@ pragma solidity ^0.8.28;
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 import { TacHeaderV1, OutMessageV1, TokenAmount, NFTAmount } from "@tonappchain/evm-ccl/contracts/core/Structs.sol";
@@ -15,7 +14,7 @@ import { StakingAccount } from "./StakingAccount.sol";
 
 /// @title TacVesting
 /// @author TACBuild Team
-contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
+contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgradeable {
 
     // === EVENTS ===
 
@@ -83,7 +82,6 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         __UUPSUpgradeable_init();
         __TacProxyV1Upgradeable_init(crossChainLayer);
         __Ownable_init(_adminAddress);
-        __ReentrancyGuard_init();
 
         stepDuration = _stepDuration;
     }
