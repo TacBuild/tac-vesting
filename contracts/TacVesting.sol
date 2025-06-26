@@ -274,7 +274,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     function undelegate(
         bytes calldata _tacHeader,
         bytes calldata _params
-    ) external nonReentrant _onlyCrossChainLayer {
+    ) external _onlyCrossChainLayer {
 
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
         uint256 amount = abi.decode(_params, (uint256));
@@ -302,7 +302,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     function claimDelegatorRewards(
         bytes calldata _tacHeader,
         bytes calldata
-    ) external nonReentrant {
+    ) external _onlyCrossChainLayer {
 
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
 
@@ -331,7 +331,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     function withdrawFromAccount(
         bytes calldata _tacHeader,
         bytes calldata
-    ) external nonReentrant _onlyCrossChainLayer {
+    ) external _onlyCrossChainLayer {
 
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
 
@@ -361,7 +361,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     function chooseImmediateWithdraw(
         bytes calldata _tacHeader,
         bytes calldata _params
-    ) external nonReentrant {
+    ) external _onlyCrossChainLayer {
 
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
         ChooseImmediateWithdrawParams memory params = abi.decode(_params, (ChooseImmediateWithdrawParams));
@@ -387,7 +387,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     function withdraw(
         bytes calldata _tacHeader,
         bytes calldata _params
-    ) external nonReentrant {
+    ) external _onlyCrossChainLayer {
 
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
         uint256 amount = abi.decode(_params, (uint256));
