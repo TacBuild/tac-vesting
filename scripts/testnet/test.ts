@@ -37,6 +37,17 @@ async function main() {
         value: ethers.parseEther("100") // 100 TAC
     })).wait();
 
+    const tonClientEndpoint = process.env.TON_CLIENT_ENDPOINT;
+    const tonClientApiKey = process.env.TON_CLIENT_API_KEY;
+
+    let tonClient: TonClient | undefined;
+    if (tonClientEndpoint && tonClientApiKey) {
+        tonClient = new TonClient({
+            endpoint: tonClientEndpoint,
+            apiKey: tonClientApiKey,
+        });
+    }
+
     const localhostNodeProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
     const sdkParams = {
         network: Network.TESTNET,
