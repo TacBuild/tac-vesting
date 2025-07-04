@@ -1,3 +1,6 @@
+import { ethers } from "hardhat";
+import { RewardsConfig } from "../utils/rewards";
+
 export type DeployConfig = {
     crossChainLayerAddress: string;
     stepDuration: bigint;
@@ -9,7 +12,7 @@ export const mainnetConfig: DeployConfig = {
 };
 
 export const testnetConfig: DeployConfig = {
-    crossChainLayerAddress: "0x",
+    crossChainLayerAddress: "0x4f3b05a601B7103CF8Fc0aBB56d042e04f222ceE",
     stepDuration: 60n * 1n, // 1 mins
 };
 

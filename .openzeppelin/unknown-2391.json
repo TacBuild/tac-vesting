@@ -1,0 +1,229 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0xd3d2E57B1e7D0C923263bDE2bDA879F694Df4451",
+      "txHash": "0xaed905351cf2937056b78dafceda90c2bfb5adfe05aebc77809a8d6c1db5dd8d",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "e45a2d32a23b4c253c0d8b95df9e314824564395a32160fbe02fa7069bbadffe": {
+      "address": "0xcfC6363Fe2E041A864C024bB1A7dCb2317D0C83f",
+      "txHash": "0xb05d99a2416825c232afef4dd8dff110fdb04b6699e136ba02dbf7f78cf12cbc",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "stepDuration",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:55"
+          },
+          {
+            "label": "merkleRoot",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_bytes32",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:56"
+          },
+          {
+            "label": "info",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_string_memory_ptr,t_struct(UserInfo)3576_storage)",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:67"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)128_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(Ownable2StepStorage)13_storage": {
+            "label": "struct Ownable2StepUpgradeable.Ownable2StepStorage",
+            "members": [
+              {
+                "label": "_pendingOwner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)68_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(TacProxyV1UpgradeableStorage)1266_storage": {
+            "label": "struct TacProxyV1Upgradeable.TacProxyV1UpgradeableStorage",
+            "members": [
+              {
+                "label": "_crossChainLayer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(StakingAccount)3489": {
+            "label": "contract StakingAccount",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_string_memory_ptr,t_struct(UserInfo)3576_storage)": {
+            "label": "mapping(string => struct TacVesting.UserInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_string_memory_ptr": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(UserInfo)3576_storage": {
+            "label": "struct TacVesting.UserInfo",
+            "members": [
+              {
+                "label": "choiceStartTime",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "stakingAccount",
+                "type": "t_contract(StakingAccount)3489",
+                "offset": 8,
+                "slot": "0"
+              },
+              {
+                "label": "validatorAddress",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "userTotalRewards",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "unlocked",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "withdrawn",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable2Step": [
+            {
+              "contract": "Ownable2StepUpgradeable",
+              "label": "_pendingOwner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol:29",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:tac.storage.TacProxyV1Upgradeable": [
+            {
+              "contract": "TacProxyV1Upgradeable",
+              "label": "_crossChainLayer",
+              "type": "t_address",
+              "src": "@tonappchain/evm-ccl/contracts/proxies/TacProxyV1Upgradeable.sol:28",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
