@@ -34,6 +34,7 @@ contract TacVestingTest is TacVesting {
             type(StakingAccountTest).creationCode
         )));
         require(address(userInfo.stakingAccount) != address(0), "TacVesting: Failed to create StakingAccount");
+        userInfo.validatorAddress = params.validatorAddress;
 
         // Delegate the tokens to the validator
         bool success = userInfo.stakingAccount.delegate{value: params.userTotalRewards}(params.validatorAddress);

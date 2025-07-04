@@ -11,7 +11,7 @@ contract StakingAccount {
 
     // === ERRORS ===
 
-    error OnlyVestingContract();
+    error OnlyDeployer();
     error DelegationWasMade();
     error ZeroAmount();
     error ZeroAddress();
@@ -25,19 +25,17 @@ contract StakingAccount {
 
     // === STATE VARIABLES ===
 
-    address public vestingContract;
-    string public validatorAddress;
+    address public deployer;
 
     // === END OF STATE VARIABLES ===
 
     constructor() {
-        // Set the vesting contract address
-        vestingContract = msg.sender;
+        deployer = msg.sender;
     }
 
-    modifier onlyVestingContract() {
-        if (msg.sender != vestingContract) {
-            revert OnlyVestingContract();
+    modifier onlyDeployer() {
+        if (msg.sender != deployer) {
+            revert OnlyDeployer();
         }
         _;
     }
@@ -54,25 +52,22 @@ contract StakingAccount {
     }
 
     /// @dev Function to delegate tokens
-    /// @param _validatorAddress The address of the validator to delegate to.
+    /// @param validatorAddress The address of the validator to delegate to.
     function delegate(
-        string calldata _validatorAddress
-    ) external payable virtual onlyVestingContract nonZeroAmount(msg.value) returns(bool) { // TODO: remove virtual modifier
-        if (bytes(validatorAddress).length > 0) {
-            revert DelegationWasMade();
-        }
-        validatorAddress = _validatorAddress;
+        string calldata validatorAddress
+    ) external payable virtual onlyDeployer nonZeroAmount(msg.value) returns(bool) { // TODO: remove virtual modifier
+
         // Delegate the tokens to the validator
-        return stakingContract.delegate(address(this), _validatorAddress, msg.value);
+        return stakingContract.delegate(address(this), validatorAddress, msg.value);
     }
 
     /// @dev Function to withdraw rewards
-    function withdrawRewards() external onlyVestingContract returns (uint256) {
+    /// @param validatorAddress The address of the validator to withdraw rewards from.
+    function withdrawRewards(string calldata validatorAddress) external onlyDeployer returns (uint256) {
         // Withdraw the rewards from the validator
         Coin[] memory rewards = distributionContract.withdrawDelegatorRewards(address(this), validatorAddress);
 
         if (rewards[0].amount > 0) {
-            // Transfer rewards to the vesting contract
             (bool success, ) = (msg.sender).call{ value: rewards[0].amount }("");
             if (!success) {
                 revert FailedToSendFunds();
@@ -83,22 +78,38 @@ contract StakingAccount {
     }
 
     /// @dev Function to undelegate tokens
+    /// @param validatorAddress The address of the validator to undelegate from.
     /// @param amount The amount of tokens to undelegate.
     /// @return completionTime The time when the undelegation is completed
     function undelegate(
+        string calldata validatorAddress,
         uint256 amount
-    ) external onlyVestingContract nonZeroAmount(amount) returns (int64) {
+    ) external onlyDeployer nonZeroAmount(amount) returns (int64) {
         // Undelegate the tokens from the validator
         return stakingContract.undelegate(address(this), validatorAddress, amount);
     }
 
+    /// @dev Function to redelegate tokens from one validator to another
+    /// @param validatorSrcAddress The address of the source validator.
+    /// @param validatorDstAddress The address of the destination validator.
+    /// @param amount The amount of tokens to redelegate.
+    /// @return completionTime The time when the redelegation is completed
+    function redelegate(
+        string calldata validatorSrcAddress,
+        string calldata validatorDstAddress,
+        uint256 amount
+    ) external onlyDeployer nonZeroAmount(amount) returns (int64) {
+        // Redelegate the tokens from one validator to another
+        return stakingContract.redelegate(address(this), validatorSrcAddress, validatorDstAddress, amount);
+    }
+
     /// @dev Withdraw all available funds (undelegated and rewards) from the staking account
-    function withdraw() external onlyVestingContract returns (uint256 amount) {
+    function withdraw() external onlyDeployer returns (uint256 amount) {
         amount = address(this).balance;
         if (amount == 0) {
             return 0; // No funds to withdraw
         }
-        // Transfer the undelegated tokens to the vesting contract
+        // Transfer the undelegated tokens
         (bool success, ) = (msg.sender).call{ value: amount }("");
         if (!success) {
             revert FailedToSendFunds();

@@ -58,6 +58,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     struct UserInfo {
         uint64         choiceStartTime; // The time when the user made their choice
         StakingAccount stakingAccount; // User's staking account
+        string         validatorAddress; // The address of the validator to delegate to, if chosen staking
         uint256        userTotalRewards; // Total rewards the user is entitled to
         uint256        unlocked; // Total rewards which are unlocked and can be withdrawn or undelegated
         uint256        withdrawn; // Total rewards the user has already withdrawn or undelegated
@@ -258,6 +259,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
             type(StakingAccount).creationCode
         )));
         require(address(userInfo.stakingAccount) != address(0), "TacVesting: Failed to create StakingAccount");
+        userInfo.validatorAddress = params.validatorAddress;
 
         // Delegate the tokens to the validator
         bool success = userInfo.stakingAccount.delegate{value: params.userTotalRewards}(params.validatorAddress);
@@ -286,7 +288,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
             "TacVesting: No available funds to undelegate");
 
         // Undelegate the tokens from the validator
-        int64 completionTime = userInfo.stakingAccount.undelegate(amount);
+        int64 completionTime = userInfo.stakingAccount.undelegate(userInfo.validatorAddress, amount);
 
         // update user's withdrawn amount
         userInfo.withdrawn += amount;
@@ -313,7 +315,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         }
 
         // Withdraw the rewards from the validator
-        uint256 rewardsAmount = userInfo.stakingAccount.withdrawRewards();
+        uint256 rewardsAmount = userInfo.stakingAccount.withdrawRewards(userInfo.validatorAddress);
 
         // send rewards to TON user
         _bridgeToTon(tacHeader, rewardsAmount);
