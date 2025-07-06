@@ -50,20 +50,21 @@ async function main() {
         config = mainnetConfig;
         addressesFilePath = path.join(__dirname, '../../mainnet_addresses.json');
         rewardsFilePath = path.join(__dirname, `./rewards/mainnet.json`);
-    } else if (hre.network.name === 'tac_staking') {
+    } else if (hre.network.name === 'tac_staking_test') {
         config = locatTestnetConfig;
-        addressesFilePath = path.join(__dirname, '../../local_testnet_addresses.json');
-        rewardsFilePath = path.join(__dirname, `./rewards/local_testnet.json`);
+        addressesFilePath = path.join(__dirname, '../../staking_test_addresses.json');
+        rewardsFilePath = path.join(__dirname, `./rewards/staking_test.json`);
     } else {
         throw new Error(`Unsupported network: ${hre.network.name}`);
     }
 
-    const rewardsConfig = loadRewadsConfig(rewardsFilePath);
-
-    const tree = createRewardsMerkleTree(rewardsConfig);
-
     const tacVesting = await deployTacVesting(deployer, config);
 
+    console.log(`TacVesting deployed at: ${await tacVesting.getAddress()}`);
+
+
+    const rewardsConfig = loadRewadsConfig(rewardsFilePath);
+    const tree = createRewardsMerkleTree(rewardsConfig);
     // set rewards merkle root
     const rewardsMerkleRoot = tree.getHexRoot();
 
@@ -72,6 +73,7 @@ async function main() {
     console.log(`Rewards merkle root set: ${rewardsMerkleRoot}`);
 
     if (hre.network.name !== 'tac_mainnet') {
+        console.log("Fund the contract with TAC tokens for testing purposes");
         let totalRewards = 0n;
         for (const reward of rewardsConfig) {
             totalRewards += reward.rewardAmount;
@@ -95,6 +97,8 @@ async function main() {
         JSON.stringify(addresses, null, 2),
         'utf8'
     );
+
+    console.log(`Finished deploying TacVesting on ${hre.network.name} network`);
 }
 
 main();

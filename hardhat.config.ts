@@ -37,7 +37,7 @@ const config: HardhatUserConfig = {
 	    url:  "http://127.0.0.1:8545",
       timeout: 360000
     },
-    tac_staking: {
+    tac_staking_test: {
       chainId: 2391337,
       url: TAC_STAKING_TEST_URL
     },
