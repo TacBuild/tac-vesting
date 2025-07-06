@@ -1,12 +1,12 @@
 import hre, { ethers } from "hardhat";
 import { createLeaf, createRewardsMerkleTree, RewardsConfig } from "../utils/rewards";
 
-import { Signer, TransactionReceipt } from "ethers";
+import { JsonRpcProvider, Signer, TransactionReceipt } from "ethers";
 import { deployTacVesting } from "../utils/deploy";
 import { DistributionPrecompileAddress, StakingPrecompileAddress, localConfig } from "../config/config";
 import { expect, use } from "chai";
-import { StakingI } from "../../typechain-types/staking";
-import { DistributionI } from "../../typechain-types/distribution";
+import { StakingI } from "../../typechain-types/";
+import { DistributionI } from "../../typechain-types/";
 import { setTimeout } from "timers/promises";
 import { GasConsumer } from "../../typechain-types";
 import { TacSdk, Network, SenderFactory, SenderAbstraction, EvmProxyMsg, startTracking, StageName } from "@tonappchain/sdk";
@@ -19,7 +19,7 @@ const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
 async function main() {
     // validator
-    const validatorAddress = "tacvaloper1l9xzp9uqjl6dxpfe2mepnp446n7pep3lp6el69";
+    const validatorAddress = "tacvaloper15lvhklny0khnwy7hgrxsxut6t6ku2cgkwu9tyt";
     const validatorPrivateKey = process.env.VALIDATOR_PRIVATE_KEY!;
     const validator = new ethers.Wallet(validatorPrivateKey, ethers.provider);
     // deployer
@@ -48,13 +48,12 @@ async function main() {
         });
     }
 
-    const localhostNodeProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
     const sdkParams = {
         network: Network.TESTNET,
-        customLiteSequencerEndpoints: ["http://127.0.0.1:8080"],
+        customLiteSequencerEndpoints: ["http://34.203.126.155:8081"],
         TACParams: {
-            provider: localhostNodeProvider,
-            settingsAddress: "0x78d84987998823714F2b45Ab95850E4240Df6381",
+            provider: new ethers.JsonRpcProvider("http://34.203.126.155:8545"),
+            settingsAddress: "0x9c57864c160DDaEecff1bB9f4ab86a431D9588c8",
         },
         TONParams: {
             settingsAddress: "EQBoFw42dxrFcBH4Wqdm7NNKxIwj6fMnl-2zIPs02Xrf_HPG",
@@ -218,6 +217,7 @@ async function main() {
             expect(userInfo.withdrawn).to.equal(0n, "User withdrawn amount should be 0");
 
             // get delegation info
+            console.log(`Staking account: ${userInfo.stakingAccount}, Validator: ${validatorAddress}`);
             const delegation = await stakingI.delegation(userInfo.stakingAccount, validatorAddress);
             console.log(`Delegation info: shares ${delegation.shares}`, `balance ${delegation.balance.amount} ${delegation.balance.denom}`);
             expect(delegation.balance.amount).to.equal(reward.rewardAmount, "Delegation amount should be equal to reward amount");
@@ -292,6 +292,11 @@ async function main() {
 
                 let userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
                 console.log(`User jetton balance before claiming: ${ethers.formatEther(userJettonBalanceBefore)} TAC`);
+
+                let rewards = await distributionI.delegationRewards(userInfo.stakingAccount, validatorAddress);
+                for (const reward of rewards) {
+                    console.log(`Delegation rewards: ${ethers.formatEther(reward.amount)} TAC, denom: ${reward.denom}, precision: ${reward.precision}`);
+                }
                 let encodedParameters = "0x";
                 await sendMessageToTacVesting(senders[i], "claimDelegatorRewards", encodedParameters, true);
 

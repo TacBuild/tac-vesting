@@ -9,7 +9,7 @@ import 'solidity-coverage';
 import { HardhatUserConfig } from "hardhat/config";
 dotenv.config();
 
-const TAC_TESTNET_URL = process.env.TAC_TESTNET_URL || "http://127.0.0.1:8545";
+const TAC_STAKING_TEST_URL = process.env.TAC_STAKING_TEST_URL || "http://127.0.0.1:8545";
 const TAC_TESTNET_SPB_URL = process.env.TAC_TESTNET_SPB_URL || "http://127.0.0.1:8545";
 
 const config: HardhatUserConfig = {
@@ -36,6 +36,10 @@ const config: HardhatUserConfig = {
     localhost: {
 	    url:  "http://127.0.0.1:8545",
       timeout: 360000
+    },
+    tac_staking: {
+      chainId: 2391337,
+      url: TAC_STAKING_TEST_URL
     },
     tac_testnet_spb: {
       chainId: 2391,

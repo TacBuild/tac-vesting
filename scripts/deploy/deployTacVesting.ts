@@ -1,6 +1,6 @@
 import hre, { ethers } from "hardhat";
 import { deployTacVesting } from "../utils/deploy";
-import { mainnetConfig, testnetConfig } from "../config/config";
+import { locatTestnetConfig, mainnetConfig, testnetConfig } from "../config/config";
 import { RewardsConfig, createRewardsMerkleTree } from "../utils/rewards";
 
 import fs from "fs";
@@ -50,6 +50,10 @@ async function main() {
         config = mainnetConfig;
         addressesFilePath = path.join(__dirname, '../../mainnet_addresses.json');
         rewardsFilePath = path.join(__dirname, `./rewards/mainnet.json`);
+    } else if (hre.network.name === 'tac_staking') {
+        config = locatTestnetConfig;
+        addressesFilePath = path.join(__dirname, '../../local_testnet_addresses.json');
+        rewardsFilePath = path.join(__dirname, `./rewards/local_testnet.json`);
     } else {
         throw new Error(`Unsupported network: ${hre.network.name}`);
     }
@@ -66,6 +70,21 @@ async function main() {
     let tx = await tacVesting.setMerkleRoot(rewardsMerkleRoot);
     await tx.wait();
     console.log(`Rewards merkle root set: ${rewardsMerkleRoot}`);
+
+    if (hre.network.name !== 'tac_mainnet') {
+        let totalRewards = 0n;
+        for (const reward of rewardsConfig) {
+            totalRewards += reward.rewardAmount;
+        }
+        // send some TAC to the contract for testing
+        let tx = await deployer.sendTransaction({
+            to: await tacVesting.getAddress(),
+            value: totalRewards
+        })
+        await tx.wait();
+    } else {
+        console.log("!!!!! Dont forget to fund the contract with TAC tokens on mainnet !!!!!");
+    }
 
     let addresses: { [key: string]: string } = {
         tacVesting: await tacVesting.getAddress()
