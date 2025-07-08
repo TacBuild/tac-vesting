@@ -4,10 +4,19 @@ pragma solidity ^0.8.28;
 
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
+import { StakingI, STAKING_PRECOMPILE_ADDRESS } from "../precompiles/staking/StakingI.sol";
+import { DistributionI, DISTRIBUTION_PRECOMPILE_ADDRESS } from "../precompiles/distribution/DistributionI.sol";
+
+import { StakingMock } from "../mock/StakingMock.sol";
+
+import { Coin, DecCoin } from "../precompiles/common/Types.sol";
+
 import { TacHeaderV1 } from "@tonappchain/evm-ccl/contracts/core/Structs.sol";
 
 import { TacVesting } from "../TacVesting.sol";
-import { StakingAccountTest } from "./StakingAccountTest.sol";
+
+import { ISAFactory } from "@tonappchain/evm-ccl/contracts/smart-account/interfaces/ISAFactory.sol";
+import { ITacSmartAccount } from "@tonappchain/evm-ccl/contracts/smart-account/interfaces/ITacSmartAccount.sol";
 
 contract TacVestingTest is TacVesting {
 
@@ -28,16 +37,23 @@ contract TacVestingTest is TacVesting {
         _checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = params.userTotalRewards;
-        userInfo.stakingAccount = StakingAccountTest(payable(Create2.deploy(
-            0,
-            keccak256(abi.encode(tacHeader.tvmCaller)),
-            type(StakingAccountTest).creationCode
-        )));
-        require(address(userInfo.stakingAccount) != address(0), "TacVesting: Failed to create StakingAccount");
+        (address sa, bool isNewAccount) = saFactory.getOrCreateSmartAccount(tacHeader.tvmCaller);
+        require(isNewAccount, "TacVesting: SmartAccount already exists");
+        userInfo.smartAccount = ITacSmartAccount(sa);
         userInfo.validatorAddress = params.validatorAddress;
 
         // Delegate the tokens to the validator
-        bool success = userInfo.stakingAccount.delegate{value: params.userTotalRewards}(params.validatorAddress);
+        bytes memory ret = userInfo.smartAccount.execute{value: params.userTotalRewards}(
+            STAKING_PRECOMPILE_ADDRESS,
+            params.userTotalRewards, // send TAC to staking mock
+            abi.encodeWithSelector(
+                StakingI.delegate.selector,
+                address(userInfo.smartAccount),
+                params.validatorAddress,
+                params.userTotalRewards
+            )
+        );
+        bool success = abi.decode(ret, (bool));
         require(success, "TacVesting: Failed to delegate tokens");
 
         emit Delegated(tacHeader.tvmCaller, params.validatorAddress, params.userTotalRewards);

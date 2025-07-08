@@ -88,6 +88,7 @@ describe('TacVesting', function () {
 
         testSdk = new TacLocalTestSdk();
         let crossChainLayerAddress = await testSdk.create(ethers.provider);
+        let saFactoryAddress = testSdk.getSmartAccountFactoryAddress();
 
         // deploy StakingMock to precompile address
         // set code to address using hardhat network helpers
@@ -108,6 +109,7 @@ describe('TacVesting', function () {
         // init
         let tx = await tacVesting.initialize(
             crossChainLayerAddress, // cross chain layer address
+            saFactoryAddress, // smart account factory address
             admin.getAddress(), // admin address
             stepDuration
         );
@@ -206,10 +208,10 @@ describe('TacVesting', function () {
 
                 const userInfo = await tacVesting.info(userReward.userTVMAddress);
 
-                expect(userInfo.stakingAccount).to.not.equal(ethers.ZeroAddress);
+                expect(userInfo.smartAccount).to.not.equal(ethers.ZeroAddress);
                 expect(userInfo.choiceStartTime).to.eq(await latest());
 
-                const stakingAccountAddress = userInfo.stakingAccount;
+                const stakingAccountAddress = userInfo.smartAccount;
 
                 const vestingBalanceAfter = await admin.provider.getBalance(tacVesting.getAddress());
                 const stakingBalanceAfter = await admin.provider.getBalance(stakingMock.getAddress());
@@ -274,7 +276,7 @@ describe('TacVesting', function () {
 
 
                 const userInfo = await tacVesting.info(userReward.userTVMAddress);
-                expect(userInfo.stakingAccount).to.equal(ethers.ZeroAddress);
+                expect(userInfo.smartAccount).to.equal(ethers.ZeroAddress);
                 expect(userInfo.choiceStartTime).to.eq(await latest());
 
                 const vestingBalanceAfter = await admin.provider.getBalance(tacVesting.getAddress());
@@ -316,7 +318,7 @@ describe('TacVesting', function () {
 
             const userInfo = await tacVesting.info(userReward.userTVMAddress);
 
-            if (userInfo.stakingAccount !== ethers.ZeroAddress) { // user chose staking
+            if (userInfo.smartAccount !== ethers.ZeroAddress) { // user chose staking
                 // check that user can't undelegate
                 let encodedArguments = abiCoder.encode(["uint256"], [1n]);
                 let catchedError = false;
@@ -360,7 +362,7 @@ describe('TacVesting', function () {
 
                 if (doSomething) continue; // skip some users
 
-                if (userInfo.stakingAccount !== ethers.ZeroAddress) { // user chose staking
+                if (userInfo.smartAccount !== ethers.ZeroAddress) { // user chose staking
                     // 1 / VESTING_STEPS of the reward should be unlocked
                     let expectedUnlockAmount;
                     if (step === VESTING_STEPS) {
@@ -406,7 +408,7 @@ describe('TacVesting', function () {
                     expect(catchedError).to.be.true;
 
                     // check that user can undelegate
-                    const delegationBefore = await stakingMock.getDelegation(userInfo.stakingAccount, validatorAddress);
+                    const delegationBefore = await stakingMock.getDelegation(userInfo.smartAccount, validatorAddress);
 
                     const undelegateAmount = availableToUndelegate / 10n ** BigInt(Math.round(Math.random() * 3));
                     encodedArguments = abiCoder.encode(["uint256"], [undelegateAmount]);
@@ -435,10 +437,10 @@ describe('TacVesting', function () {
                     userInfo = await tacVesting.info(userReward.userTVMAddress);
                     expect(userInfo.withdrawn).to.equal(usersWithdraw[userReward.userTVMAddress]);
 
-                    const delegationAfter = await stakingMock.getDelegation(userInfo.stakingAccount, validatorAddress);
+                    const delegationAfter = await stakingMock.getDelegation(userInfo.smartAccount, validatorAddress);
                     expect(delegationAfter.amount).to.equal(delegationBefore.amount - undelegateAmount);
 
-                    const undelegation = await stakingMock.getUndelegation(userInfo.stakingAccount, undelegationTime);
+                    const undelegation = await stakingMock.getUndelegation(userInfo.smartAccount, undelegationTime);
                     expect(undelegation.amount).to.equal(undelegateAmount);
 
                     // check that user can claim delegator rewards
@@ -459,10 +461,10 @@ describe('TacVesting', function () {
 
                     // wait for completion timeout
                     await increase(COMPLETION_TIMEOUT);
-                    let tx =  await stakingMock.sendUndelegated(userInfo.stakingAccount, undelegationTime);
+                    let tx =  await stakingMock.sendUndelegated(userInfo.smartAccount, undelegationTime);
                     await tx.wait();
 
-                    expect(await admin.provider.getBalance(userInfo.stakingAccount)).to.equal(undelegateAmount);
+                    expect(await admin.provider.getBalance(userInfo.smartAccount)).to.equal(undelegateAmount);
 
                     // check that user can withdraw undelegated funds
                     const cclBalanceBefore = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
@@ -571,7 +573,7 @@ describe('TacVesting', function () {
 
             let userInfo = await tacVesting.info(userReward.userTVMAddress);
 
-            if (userInfo.stakingAccount !== ethers.ZeroAddress) { // user chose staking
+            if (userInfo.smartAccount !== ethers.ZeroAddress) { // user chose staking
                 // check that user can undelegate all available funds
                 const availableToUndelegate = await tacVesting.getAvailable(userReward.userTVMAddress);
                 if (availableToUndelegate === 0n) {
@@ -603,9 +605,9 @@ describe('TacVesting', function () {
 
                 // wait for completion timeout
                 await increase(COMPLETION_TIMEOUT);
-                let tx =  await stakingMock.sendUndelegated(userInfo.stakingAccount, undelegationTime);
+                let tx =  await stakingMock.sendUndelegated(userInfo.smartAccount, undelegationTime);
                 await tx.wait();
-                expect(await admin.provider.getBalance(userInfo.stakingAccount)).to.equal(availableToUndelegate);
+                expect(await admin.provider.getBalance(userInfo.smartAccount)).to.equal(availableToUndelegate);
 
                 // check that user can withdraw undelegated funds
                 const cclBalanceBefore = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());

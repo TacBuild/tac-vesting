@@ -1,10 +1,10 @@
 import hre, { ethers } from "hardhat";
 import { createLeaf, createRewardsMerkleTree, RewardsConfig } from "../utils/rewards";
 
-import { JsonRpcProvider, Signer, TransactionReceipt } from "ethers";
+import { TransactionReceipt } from "ethers";
 import { deployTacVesting } from "../utils/deploy";
 import { DistributionPrecompileAddress, StakingPrecompileAddress, localConfig } from "../config/config";
-import { expect, use } from "chai";
+import { expect } from "chai";
 import { StakingI } from "../../typechain-types/";
 import { DistributionI } from "../../typechain-types/";
 import { setTimeout } from "timers/promises";
@@ -211,14 +211,14 @@ async function main() {
 
             // check staking account was created
             const userInfo = await tacVesting.info(userAddress);
-            expect(userInfo.stakingAccount).to.not.equal(ethers.ZeroAddress, "Staking account should be created");
+            expect(userInfo.smartAccount).to.not.equal(ethers.ZeroAddress, "Staking account should be created");
             expect(userInfo.userTotalRewards).to.equal(reward.rewardAmount, "Amount should be equal to reward amount");
             expect(userInfo.unlocked).to.equal(0n, "User unlocked amount should be 0");
             expect(userInfo.withdrawn).to.equal(0n, "User withdrawn amount should be 0");
 
             // get delegation info
-            console.log(`Staking account: ${userInfo.stakingAccount}, Validator: ${validatorAddress}`);
-            const delegation = await stakingI.delegation(userInfo.stakingAccount, validatorAddress);
+            console.log(`Staking account: ${userInfo.smartAccount}, Validator: ${validatorAddress}`);
+            const delegation = await stakingI.delegation(userInfo.smartAccount, validatorAddress);
             console.log(`Delegation info: shares ${delegation.shares}`, `balance ${delegation.balance.amount} ${delegation.balance.denom}`);
             expect(delegation.balance.amount).to.equal(reward.rewardAmount, "Delegation amount should be equal to reward amount");
 
@@ -243,7 +243,7 @@ async function main() {
             withdraws[userAddress] = immediateWithdrawAmount;
 
             const userInfo = await tacVesting.info(userAddress);
-            expect(userInfo.stakingAccount).to.equal(ethers.ZeroAddress, "Staking account should not be created");
+            expect(userInfo.smartAccount).to.equal(ethers.ZeroAddress, "Staking account should not be created");
             expect(userInfo.userTotalRewards).to.equal(reward.rewardAmount, "Amount should be equal to reward amount");
             expect(userInfo.unlocked).to.equal(immediateWithdrawAmount, "User unlocked amount should be equal to immediate withdraw amount");
             expect(userInfo.withdrawn).to.equal(immediateWithdrawAmount, "User withdrawn amount should be equal to immediate withdraw amount");
@@ -287,13 +287,13 @@ async function main() {
             console.log(`Step ${step} passed...`);
 
             // if choosen staking
-            if (userInfo.stakingAccount !== ethers.ZeroAddress) {
+            if (userInfo.smartAccount !== ethers.ZeroAddress) {
                 // try to claim rewards
 
                 let userJettonBalanceBefore = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);
                 console.log(`User jetton balance before claiming: ${ethers.formatEther(userJettonBalanceBefore)} TAC`);
 
-                let rewards = await distributionI.delegationRewards(userInfo.stakingAccount, validatorAddress);
+                let rewards = await distributionI.delegationRewards(userInfo.smartAccount, validatorAddress);
                 for (const reward of rewards) {
                     console.log(`Delegation rewards: ${ethers.formatEther(reward.amount)} TAC, denom: ${reward.denom}, precision: ${reward.precision}`);
                 }
@@ -304,7 +304,7 @@ async function main() {
                 console.log(`User jetton balance after claiming: ${ethers.formatEther(userJettonBalanceAfter)} TAC`);
 
                 console.log(`Rewards received: ${ethers.formatEther(userJettonBalanceAfter - userJettonBalanceBefore )} TAC`);
-                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
+                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.smartAccount);
                 console.log(`Staking account balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
                 // check unlocked
                 let expectedUnlocked;
@@ -347,7 +347,7 @@ async function main() {
                 expect(eventFound, "Undelegated event should be emitted").to.be.true;
 
                 withdraws[userAddress] += availableToUndelegate;
-                const stakingAccountBalanceAfter = await deployer.provider!.getBalance(userInfo.stakingAccount);
+                const stakingAccountBalanceAfter = await deployer.provider!.getBalance(userInfo.smartAccount);
                 console.log(`Staking account balance after undelegation: ${ethers.formatEther(stakingAccountBalanceAfter)} TAC`);
             } else { // if choosen immediate withdraw
                 // check unlocked: first transfer + (total - first) * step / VESTING_STEPS
@@ -390,7 +390,7 @@ async function main() {
         const userReward = rewards[i];
         const userAddress = userReward.userTVMAddress;
         const userInfo = await tacVesting.info(userAddress);
-        if (userInfo.stakingAccount === ethers.ZeroAddress) {
+        if (userInfo.smartAccount === ethers.ZeroAddress) {
             continue; // no staking account, skip
         }
 
@@ -432,8 +432,8 @@ async function main() {
                 }
 
                 console.log(`User ${i + 1}/${usersCount} ${userAddress} has undelegated funds to receive: ${ethers.formatEther(undelegation.amount)} TAC`);
-                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
-                console.log(`Staking account(${userInfo.stakingAccount}) balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
+                const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.smartAccount);
+                console.log(`Staking account(${userInfo.smartAccount}) balance: ${ethers.formatEther(stakingAccountBalance)} TAC`);
 
                 if (stakingAccountBalance !== 0n) {
                     // try receive undelegated funds
@@ -469,7 +469,7 @@ async function main() {
     for (let i = 0; i < usersCount; i++) {
         const userAddress = rewards[i].userTVMAddress;
         const userInfo = await tacVesting.info(userAddress);
-        const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.stakingAccount);
+        const stakingAccountBalance = await deployer.provider!.getBalance(userInfo.smartAccount);
 
         console.log(`User ${i + 1}/${usersCount}: ${userAddress} staking account balance: ${stakingAccountBalance} TAC`);
         const userJettonBalance = await tacSdk.getUserJettonBalance(userAddress, tacJettonAddress);

@@ -5,12 +5,17 @@ pragma solidity ^0.8.28;
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+
+import { StakingI, STAKING_PRECOMPILE_ADDRESS } from "./precompiles/staking/StakingI.sol";
+import { DistributionI, DISTRIBUTION_PRECOMPILE_ADDRESS } from "./precompiles/distribution/DistributionI.sol";
+import { Coin, DecCoin } from "./precompiles/common/Types.sol";
 
 import { TacHeaderV1, OutMessageV1, TokenAmount, NFTAmount } from "@tonappchain/evm-ccl/contracts/core/Structs.sol";
 import { TacProxyV1Upgradeable } from "@tonappchain/evm-ccl/contracts/proxies/TacProxyV1Upgradeable.sol";
 
-import { StakingAccount } from "./StakingAccount.sol";
+import { ISAFactory } from "@tonappchain/evm-ccl/contracts/smart-account/interfaces/ISAFactory.sol";
+import { ITacSmartAccount } from "@tonappchain/evm-ccl/contracts/smart-account/interfaces/ITacSmartAccount.sol";
+
 
 /// @title TacVesting
 /// @author TACBuild Team
@@ -52,16 +57,17 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     uint256 public constant VESTING_STEPS = 3; // number of vesting steps (3 steps = 3 months)
 
     // === STATE VARIABLES ===
+    ISAFactory public saFactory; // Smart Account Factory
     uint256 public stepDuration; // Duration of each vesting step in seconds
     bytes32 public merkleRoot;
 
     struct UserInfo {
-        uint64         choiceStartTime; // The time when the user made their choice
-        StakingAccount stakingAccount; // User's staking account
-        string         validatorAddress; // The address of the validator to delegate to, if chosen staking
-        uint256        userTotalRewards; // Total rewards the user is entitled to
-        uint256        unlocked; // Total rewards which are unlocked and can be withdrawn or undelegated
-        uint256        withdrawn; // Total rewards the user has already withdrawn or undelegated
+        uint64           choiceStartTime; // The time when the user made their choice
+        ITacSmartAccount smartAccount; // User's staking account
+        string           validatorAddress; // The address of the validator to delegate to, if chosen staking
+        uint256          userTotalRewards; // Total rewards the user is entitled to
+        uint256          unlocked; // Total rewards which are unlocked and can be withdrawn or undelegated
+        uint256          withdrawn; // Total rewards the user has already withdrawn or undelegated
     }
 
     mapping(string => UserInfo) public info;
@@ -76,13 +82,18 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
      */
     function initialize(
         address crossChainLayer,
+        address saFactoryAddress,
         address _adminAddress,
         uint256 _stepDuration
     ) public initializer virtual { // TODO: remove virtual modifier
         require(_adminAddress != address(0), "TacVesting: Admin address cannot be zero");
+        require(crossChainLayer != address(0), "TacVesting: Cross chain layer address cannot be zero");
+        require(saFactoryAddress != address(0), "TacVesting: Smart Account Factory address cannot be zero");
         __UUPSUpgradeable_init();
         __TacProxyV1Upgradeable_init(crossChainLayer);
         __Ownable_init(_adminAddress);
+
+        saFactory = ISAFactory(saFactoryAddress);
 
         stepDuration = _stepDuration;
     }
@@ -157,7 +168,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         UserInfo storage userInfo
     ) internal view {
         _checkChoiceTime(userInfo);
-        require(address(userInfo.stakingAccount) != address(0), "TacVesting: User has not chosen staking");
+        require(address(userInfo.smartAccount) != address(0), "TacVesting: User has not chosen staking");
     }
 
     /// @dev Check if the user has chosen immediate withdraw
@@ -166,7 +177,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         UserInfo storage userInfo
     ) internal view {
         _checkChoiceTime(userInfo);
-        require(address(userInfo.stakingAccount) == address(0), "TacVesting: User has not chosen immediate withdraw");
+        require(address(userInfo.smartAccount) == address(0), "TacVesting: User has not chosen immediate withdraw");
     }
 
     /// @dev Calculate user's unlocked rewards.
@@ -184,7 +195,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         if (stepsCompleted == VESTING_STEPS) {
             unlocked = userInfo.userTotalRewards; // All rewards are unlocked after the last step
         } else {
-            if (address(userInfo.stakingAccount) != address(0)) { // if user choosen staking
+            if (address(userInfo.smartAccount) != address(0)) { // if user choosen staking
                 unlocked = (userInfo.userTotalRewards * stepsCompleted) / VESTING_STEPS;
             } else { // if user choosen immediate withdraw
                 uint256 firstTransfer = (userInfo.userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
@@ -253,16 +264,23 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         _checkNoChoice(userInfo);
         userInfo.choiceStartTime = uint64(block.timestamp);
         userInfo.userTotalRewards = params.userTotalRewards;
-        userInfo.stakingAccount = StakingAccount(payable(Create2.deploy(
-            0,
-            keccak256(abi.encode(tacHeader.tvmCaller)),
-            type(StakingAccount).creationCode
-        )));
-        require(address(userInfo.stakingAccount) != address(0), "TacVesting: Failed to create StakingAccount");
+        (address sa, bool isNewAccount) = saFactory.getOrCreateSmartAccount(tacHeader.tvmCaller);
+        require(isNewAccount, "TacVesting: SmartAccount already exists");
+        userInfo.smartAccount = ITacSmartAccount(sa);
         userInfo.validatorAddress = params.validatorAddress;
 
         // Delegate the tokens to the validator
-        bool success = userInfo.stakingAccount.delegate{value: params.userTotalRewards}(params.validatorAddress);
+        bytes memory ret = userInfo.smartAccount.execute{value: params.userTotalRewards}(
+            STAKING_PRECOMPILE_ADDRESS,
+            0, // do not send TAC to staking precompile
+            abi.encodeWithSelector(
+                StakingI.delegate.selector,
+                address(userInfo.smartAccount),
+                params.validatorAddress,
+                params.userTotalRewards
+            )
+        );
+        bool success = abi.decode(ret, (bool));
         require(success, "TacVesting: Failed to delegate tokens");
 
         emit Delegated(tacHeader.tvmCaller, params.validatorAddress, params.userTotalRewards);
@@ -288,12 +306,32 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
             "TacVesting: No available funds to undelegate");
 
         // Undelegate the tokens from the validator
-        int64 completionTime = userInfo.stakingAccount.undelegate(userInfo.validatorAddress, amount);
-
+        bytes memory ret = userInfo.smartAccount.execute(
+            STAKING_PRECOMPILE_ADDRESS,
+            0,
+            abi.encodeWithSelector(
+                StakingI.undelegate.selector,
+                address(userInfo.smartAccount),
+                userInfo.validatorAddress,
+                amount
+            )
+        );
+        int64 completionTime = abi.decode(ret, (int64));
         // update user's withdrawn amount
         userInfo.withdrawn += amount;
 
         emit Undelegated(tacHeader.tvmCaller, amount, completionTime);
+    }
+
+    function _withdrawFromSmartAccount(
+        ITacSmartAccount smartAccount,
+        uint256 amount
+    ) internal {
+        smartAccount.execute(
+            address(this),
+            amount,
+            "" // empty payload, we just want to withdraw the amount
+        );
     }
 
     /// @dev Claim delegator rewards
@@ -315,12 +353,25 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         }
 
         // Withdraw the rewards from the validator
-        uint256 rewardsAmount = userInfo.stakingAccount.withdrawRewards(userInfo.validatorAddress);
+        bytes memory ret = userInfo.smartAccount.execute(
+            DISTRIBUTION_PRECOMPILE_ADDRESS,
+            0, // do not send TAC to distribution precompile
+            abi.encodeWithSelector(
+                DistributionI.withdrawDelegatorRewards.selector,
+                address(userInfo.smartAccount),
+                userInfo.validatorAddress
+            )
+        );
+        Coin[] memory rewardsCoin = abi.decode(ret, (Coin[]));
+        uint256 rewardsAmount = rewardsCoin.length > 0 ? rewardsCoin[0].amount : 0;
+        if (rewardsAmount > 0) {
+            // Withdraw the rewards from the smart account
+            _withdrawFromSmartAccount(userInfo.smartAccount, rewardsAmount);
+            // send rewards to TON user
+            _bridgeToTon(tacHeader, rewardsCoin[0].amount);
+        }
 
-        // send rewards to TON user
-        _bridgeToTon(tacHeader, rewardsAmount);
-
-        emit RewardsClaimed(tacHeader.tvmCaller, rewardsAmount);
+        emit RewardsClaimed(tacHeader.tvmCaller, rewardsCoin[0].amount);
     }
 
     /// @dev Withdraw tokens from staking account. It's used to withdraw undelegated tokens and rewards.
@@ -338,11 +389,14 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         UserInfo storage userInfo = info[tacHeader.tvmCaller];
         _checkStaking(userInfo);
         // Withdraw from staking account
-        uint256 amount = userInfo.stakingAccount.withdraw();
+        uint256 amountToWithdraw = address(userInfo.smartAccount).balance;
         // send tokens to TON user
-        if (amount > 0) _bridgeToTon(tacHeader, amount);
+        if (amountToWithdraw > 0) {
+            _withdrawFromSmartAccount(userInfo.smartAccount, amountToWithdraw);
+            _bridgeToTon(tacHeader, amountToWithdraw);
+        }
 
-        emit WithdrawnFromAccount(tacHeader.tvmCaller, amount);
+        emit WithdrawnFromAccount(tacHeader.tvmCaller, amountToWithdraw);
     }
 
     // == IMMEDIATE WITHDRAW ==
