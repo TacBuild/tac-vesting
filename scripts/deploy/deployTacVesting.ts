@@ -5,6 +5,7 @@ import { RewardsConfig, createRewardsMerkleTree } from "../utils/rewards";
 
 import fs from "fs";
 import path from "path";
+import { saveContractAddress } from "@tonappchain/evm-ccl";
 
 function loadRewadsConfig(filePath: string): RewardsConfig[] {
     if (!fs.existsSync(filePath)) {
@@ -88,15 +89,11 @@ async function main() {
         console.log("!!!!! Dont forget to fund the contract with TAC tokens on mainnet !!!!!");
     }
 
-    let addresses: { [key: string]: string } = {
-        tacVesting: await tacVesting.getAddress()
-    };
-
-    fs.writeFileSync(
+    saveContractAddress(
         addressesFilePath,
-        JSON.stringify(addresses, null, 2),
-        'utf8'
-    );
+        "tacVesting",
+        await tacVesting.getAddress(),
+    )
 
     console.log(`Finished deploying TacVesting on ${hre.network.name} network`);
 }
