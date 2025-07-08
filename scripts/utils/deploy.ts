@@ -10,6 +10,7 @@ export async function deployTacVesting(deployer: Signer, config: DeployConfig ):
         TacVesting,
         [
             config.crossChainLayerAddress, // cross chain layer address
+            config.saFactoryAddress, // sa factory address
             await deployer.getAddress(), // admin address
             config.stepDuration // step duration in seconds
         ],
