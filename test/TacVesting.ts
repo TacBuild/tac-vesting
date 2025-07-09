@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 import { expect } from 'chai';
 import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 import { setBalance, setCode } from '@nomicfoundation/hardhat-network-helpers';
@@ -14,7 +14,7 @@ import { DistributionPrecompileAddress, StakingPrecompileAddress, testnetConfig 
 
 import StakingMockArtifact from '../artifacts/contracts/mock/StakingMock.sol/StakingMock.json';
 import DistributionMockArtifact from '../artifacts/contracts/mock/DistributionMock.sol/DistributionMock.json';
-import { SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
+import { deploy, deployUpgradableLocal, SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
 import { DelegatedEvent, RewardsClaimedEvent, UndelegatedEvent, WithdrawnEvent, WithdrawnFromAccountEvent } from '../typechain-types/contracts/TacVesting';
 
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
@@ -49,9 +49,6 @@ describe('TacVesting', function () {
     let IMMEDIATE_PCT: bigint;
     let VESTING_STEPS: bigint;
     let COMPLETION_TIMEOUT: bigint;
-
-    let receiverAddress: string;
-    let rewardsReceiverAddress: string;
 
     // users withdraw/undelegation info
     let usersWithdraw: {
@@ -102,18 +99,21 @@ describe('TacVesting', function () {
         await setBalance(await distributionMock.getAddress(), ethers.parseEther("100000000000000000"));
 
         // deploy TacVestingTest
-        const TacVesting = await ethers.getContractFactory('TacVestingTest');
-        tacVesting = await TacVesting.deploy();
-        await tacVesting.waitForDeployment();
-
-        // init
-        let tx = await tacVesting.initialize(
-            crossChainLayerAddress, // cross chain layer address
-            saFactoryAddress, // smart account factory address
-            admin.getAddress(), // admin address
-            stepDuration
+        tacVesting = await deployUpgradableLocal<TacVestingTest>(
+            admin as unknown as Signer,
+            hre.artifacts.readArtifactSync("TacVestingTest"),
+            [
+                crossChainLayerAddress, // cross chain layer address
+                saFactoryAddress, // sa factory address
+                await admin.getAddress(), // admin address
+                stepDuration, // step duration in seconds
+            ],
+            {
+                kind: "uups",
+            },
+            undefined,
+            true
         );
-        await tx.wait();
 
         VESTING_STEPS = await tacVesting.VESTING_STEPS();
         BASIS_POINTS = await tacVesting.BASIS_POINTS();
@@ -122,11 +122,6 @@ describe('TacVesting', function () {
 
         usersWithdraw = {};
 
-        const receiver = ethers.Wallet.createRandom(admin.provider);
-        receiverAddress = await receiver.getAddress();
-
-        const rewardsReceiver = ethers.Wallet.createRandom(admin.provider);
-        rewardsReceiverAddress = await rewardsReceiver.getAddress();
     });
 
     it('Generate user rewards', async function () {

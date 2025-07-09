@@ -75,6 +75,8 @@ contract StakingProxy is
     /// @dev The address of the Smart Account Factory
     ISAFactory public saFactory;
 
+    // === END OF STATE VARIABLES ===
+
     /// @dev Initializes the contract with the addresses of the Staking and Distribution precompiles and the Smart Account Factory
     function initialize(
         address _crossChainLayer,
@@ -107,6 +109,11 @@ contract StakingProxy is
         internal
         override
         onlyOwner {}
+
+    receive() external payable {
+        // This function is required to receive TAC from the Smart Account
+        // when users withdraw their balance.
+    }
 
     //================================================================
     // INTERNAL FUNCTIONS
@@ -148,7 +155,7 @@ contract StakingProxy is
     function delegate(
         bytes calldata _tacHeader,
         bytes calldata _params
-    ) external virtual _onlyCrossChainLayer {
+    ) external payable virtual _onlyCrossChainLayer {
         TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
         DelegateParams memory params = abi.decode(_params, (DelegateParams));
 

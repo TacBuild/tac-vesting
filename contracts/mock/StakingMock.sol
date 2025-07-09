@@ -23,13 +23,15 @@ contract StakingMock {
     }
 
     struct Redelegation {
+        string validatorAddressFrom;
+        string validatorAddressTo;
         uint256 amount;
         int64 completionTime;
     }
 
     mapping(address => mapping(string => Delegation)) public delegations;
     mapping(address => mapping(uint64 => Undelegation)) public undelegations;
-    mapping(address => mapping(string => Redelegation)) public redelegations;
+    mapping(address => mapping(uint64 => Redelegation)) public redelegations;
 
     function getDelegation(
         address delegatorAddress,
@@ -47,9 +49,9 @@ contract StakingMock {
 
     function getRedelegation(
         address delegatorAddress,
-        string memory validatorAddress
+        uint64 redelegationTime
     ) external view returns (Redelegation memory redelegation) {
-        return redelegations[delegatorAddress][validatorAddress];
+        return redelegations[delegatorAddress][redelegationTime];
     }
 
     /// @dev Defines a method for performing a delegation of coins from a delegator to a validator.
@@ -67,8 +69,8 @@ contract StakingMock {
         require(msg.value == amount, "Incorrect amount sent");
 
         Delegation storage _delegation = delegations[delegatorAddress][validatorAddress];
-        _delegation.delegationTime = uint64(block.timestamp);
         _delegation.amount += amount;
+        _delegation.delegationTime = uint64(block.timestamp);
 
         success = true;
     }
@@ -109,14 +111,20 @@ contract StakingMock {
         uint256 amount
     ) external returns (int64 completionTime) {
         require(amount > 0, "Amount must be greater than zero");
-        Delegation storage _delegation = delegations[delegatorAddress][fromValidatorAddress];
-        require(_delegation.amount >= amount, "Insufficient delegation amount");
-        _delegation.amount -= amount;
 
-        Redelegation storage redelegation = redelegations[delegatorAddress][toValidatorAddress];
+        Delegation storage fromDelegation = delegations[delegatorAddress][fromValidatorAddress];
+        require(fromDelegation.amount >= amount, "Insufficient delegation amount from the source validator");
+
+        Redelegation storage redelegation = redelegations[delegatorAddress][uint64(block.timestamp)];
+
+        redelegation.validatorAddressFrom = fromValidatorAddress;
+        redelegation.validatorAddressTo = toValidatorAddress;
         redelegation.amount += amount;
+
         completionTime = int64(uint64(block.timestamp) + COMPLETION_TIMEOUT);
         redelegation.completionTime = completionTime;
+
+        return completionTime;
     }
 
 
@@ -136,6 +144,24 @@ contract StakingMock {
         require(success, "Failed to send undelegated funds");
     }
 
+    function sendRedelegated(
+        address delegatorAddress,
+        uint64 redelegationTime
+    ) external {
+        Redelegation storage redelegation = redelegations[delegatorAddress][redelegationTime];
+        require(redelegation.completionTime <= int64(uint64(block.timestamp)), "Redelegation not completed yet");
+        require(redelegation.amount > 0, "No redelegated amount");
+
+        uint256 amount = redelegation.amount;
+        redelegation.amount = 0;
+
+        Delegation storage delegationFrom = delegations[delegatorAddress][redelegation.validatorAddressFrom];
+        Delegation storage delegationTo = delegations[delegatorAddress][redelegation.validatorAddressTo];
+        delegationFrom.amount -= amount;
+        delegationTo.amount += amount;
+
+        delete redelegations[delegatorAddress][redelegationTime];
+    }
 
     function delegation(
         address delegatorAddress,
