@@ -307,10 +307,18 @@ contract StakingProxy is
                 params.validatorAddress
             )
         );
+
         Coin[] memory rewards = abi.decode(ret, (Coin[]));
 
         require(rewards.length > 0, "StakingProxy: No rewards to withdraw");
         require(rewards[0].amount > 0, "StakingProxy: No rewards to withdraw");
+
+        // withdraw the rewards to the Smart Account
+        smartAccount.execute(
+            address(this),
+            rewards[0].amount, // send TAC to this contract
+            ""
+        );
 
         // Bridge the rewards to the TVM
         _bridgeToTon(tacHeader, rewards[0].amount);
