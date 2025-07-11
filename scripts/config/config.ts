@@ -15,7 +15,7 @@ export const mainnetConfig: DeployConfig = {
 
 export const testnetConfig: DeployConfig = {
     crossChainLayerAddress: "0x4f3b05a601B7103CF8Fc0aBB56d042e04f222ceE",
-    saFactoryAddress: "0x510ee99eD721107851D692f761198E3dE4e9310D",
+    saFactoryAddress: "0x5919D1D0D1b36F08018d7C9650BF914AEbC6BAd6",
     stepDuration: 60n * 6n, // 6 mins
 };
 
