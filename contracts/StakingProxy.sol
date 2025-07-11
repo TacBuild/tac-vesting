@@ -142,6 +142,17 @@ contract StakingProxy is
         _sendMessageV1(outMessage, amount);
     }
 
+    function _withdrawFromSmartAccount(
+        ITacSmartAccount smartAccount,
+        uint256 amount
+    ) internal {
+        smartAccount.execute(
+            address(this),
+            amount,
+            "" // empty payload, we just want to withdraw the amount
+        );
+    }
+
 
     //================================================================
     // USER's FUNCTIONS
@@ -319,11 +330,7 @@ contract StakingProxy is
         require(rewards[0].amount > 0, "StakingProxy: No rewards to withdraw");
 
         // withdraw the rewards to the Smart Account
-        smartAccount.execute(
-            address(this),
-            rewards[0].amount, // send TAC to this contract
-            ""
-        );
+        _withdrawFromSmartAccount(smartAccount, rewards[0].amount);
 
         // Bridge the rewards to the TVM
         _bridgeToTon(tacHeader, rewards[0].amount);
@@ -353,11 +360,7 @@ contract StakingProxy is
         require(balance > 0, "StakingProxy: No balance to withdraw");
 
         // Execute the withdrawal from the Smart Account
-        smartAccount.execute(
-            address(this),
-            balance, // send all TAC to this contract
-            "" // no payload
-        );
+        _withdrawFromSmartAccount(smartAccount, balance);
 
         // Bridge the balance to the TVM
         _bridgeToTon(tacHeader, balance);
