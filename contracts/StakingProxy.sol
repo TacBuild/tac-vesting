@@ -77,6 +77,11 @@ contract StakingProxy is
 
     // === END OF STATE VARIABLES ===
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @dev Initializes the contract with the addresses of the Staking and Distribution precompiles and the Smart Account Factory
     function initialize(
         address _crossChainLayer,

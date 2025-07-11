@@ -74,6 +74,11 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
 
     // === END OF STATE VARIABLES ===
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Initializer function to initialize the contract with initial state.
      * @param crossChainLayer The address of the cross chain layer contract.
