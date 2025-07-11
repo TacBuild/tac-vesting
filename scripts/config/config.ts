@@ -8,14 +8,14 @@ export type DeployConfig = {
 }
 
 export const mainnetConfig: DeployConfig = {
-    crossChainLayerAddress: "",
-    saFactoryAddress: "",
+    crossChainLayerAddress: "0x9fee01e948353E0897968A3ea955815aaA49f58d",
+    saFactoryAddress: "0x070820Ed658860f77138d71f74EfbE173775895b",
     stepDuration: 3600n * 24n * 30n, // 30 days in seconds
 };
 
 export const testnetConfig: DeployConfig = {
     crossChainLayerAddress: "0x4f3b05a601B7103CF8Fc0aBB56d042e04f222ceE",
-    saFactoryAddress: "",
+    saFactoryAddress: "0x510ee99eD721107851D692f761198E3dE4e9310D",
     stepDuration: 60n * 6n, // 6 mins
 };
 
