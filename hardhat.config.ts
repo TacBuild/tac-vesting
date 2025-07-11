@@ -43,7 +43,8 @@ const config: HardhatUserConfig = {
     },
     tac_testnet_spb: {
       chainId: 2391,
-      url: TAC_TESTNET_SPB_URL
+      url: TAC_TESTNET_SPB_URL,
+      timeout: 360000
     }
   },
   gasReporter: {
