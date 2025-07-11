@@ -124,7 +124,6 @@ describe('TacVesting', function () {
 
             await sendMessage(user, "delegate(bytes,bytes)", encoded, amount);
         }
-
     });
 
 });

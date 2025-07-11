@@ -3,13 +3,13 @@ import { ethers } from "hardhat";
 
 async function main() {
 
-    const stakingProxyAddress = "0x4f3b05a601B7103CF8Fc0aBB56d042e04f222ceE";
+    const stakingProxyAddress = "0x65950Fd666C26fd0ffCF1D1B1543b8089eEbf7eB";
     const stakingProxy = await ethers.getContractAt("StakingProxy", stakingProxyAddress);
 
     const eventFilter = stakingProxy.filters.Delegated();
 
     const events = [];
-    let fromBlock = 0;
+    let fromBlock = 2890553;
     let toBlock = 0;
     const latestBlock = await ethers.provider.getBlockNumber();
 
@@ -24,7 +24,7 @@ async function main() {
     }
 
     for (const event of events) {
-        console.log(`Delegated, txHash: ${event.transactionHash}, args: ${event.args?.tvmCaller} delegated ${event.args?.validatorAddress} TAC to ${ethers.formatEther(event.args?.amount)}`);
+        console.log(`Delegated, txHash: ${event.transactionHash}, args: wallet ${event.args?.tvmCaller} validator ${event.args?.validatorAddress} amount ${ethers.formatEther(event.args?.amount)} TAC`);
     }
 }
 

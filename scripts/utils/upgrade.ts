@@ -85,3 +85,73 @@ export async function upgradeContract(
         }
     }
 }
+
+export async function transferOwnership(
+    deployer: Signer,
+    addressesFilePath: string,
+    newOwner: string,
+): Promise<void> {
+
+    const network = hre.network.name;
+
+    console.log(`Transferring ownership on ${network}, file: ${addressesFilePath}`);
+
+    if (!fs.existsSync(addressesFilePath)) {
+        throw new Error(`File ${addressesFilePath} not found`);
+    }
+
+    const addresses = JSON.parse(fs.readFileSync(addressesFilePath, "utf-8")) as ContractAddresses;
+
+    const contractNames = Object.keys(addresses);
+
+    const { contractName } = await inquirer.prompt<{ contractName: string }>([
+        {
+            type: "list",
+            name: "contractName",
+            message: `Select a contract to transfer ownership:`,
+            choices: contractNames
+        }
+    ]);
+
+    const artifacts = await hre.artifacts.getAllFullyQualifiedNames();
+
+    const matched = guessContractName(contractName, artifacts);
+    if (!matched) {
+        throw new Error(`Contract ${contractName} not found in atrifacts`);
+    }
+
+    const address = addresses[contractName];
+    console.log(`Contract: ${matched}`);
+    console.log(`Network: ${hre.network.name}`);
+    console.log(`Address: ${address}`);
+
+    const contract = await ethers.getContractAt(matched, address, deployer);
+
+    const currentOwner = await contract.owner();
+
+    console.log(`Current owner: ${currentOwner}`);
+    if (currentOwner.toLowerCase() !== (await deployer.getAddress()).toLowerCase()) {
+        throw new Error(`Deployer is not the owner of the contract ${contractName} at ${address}`);
+    }
+
+    // Ask for confirmation
+    const { confirmTransfer } = await inquirer.prompt([
+        {
+            type: "confirm",
+            name: "confirmTransfer",
+            message: `Do you want to transfer ownership to ${newOwner}?`,
+            default: false,
+        },
+    ]);
+    if (!confirmTransfer) {
+        console.log(`Ownership transfer cancelled.`);
+        return;
+    }
+
+    console.log(`Transferring ownership to ${newOwner}`);
+
+    const tx = await contract.transferOwnership(newOwner);
+    await tx.wait();
+
+    console.log(`Ownership transferred to ${newOwner}`);
+}
