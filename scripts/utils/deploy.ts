@@ -5,6 +5,19 @@ import { DeployConfig } from "../config/config";
 import { Signer } from "ethers";
 import { deployUpgradable } from "@tonappchain/evm-ccl";
 
+import fs from "fs";
+
+export type ContractAddresses = {
+    [contractName: string]: string
+}
+
+export function loadContractAddresses(filePath: string): ContractAddresses {
+    if (!fs.existsSync(filePath)) {
+        throw new Error(`File ${filePath} not found`);
+    }
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as ContractAddresses;
+}
+
 export async function deployTacVesting(deployer: Signer, config: DeployConfig ): Promise<TacVesting> {
     return await deployUpgradable<TacVesting>(
         deployer,

@@ -1,12 +1,9 @@
 import hre, { ethers, upgrades } from "hardhat";
 import { Signer } from "ethers";
+import { ContractAddresses, loadContractAddresses } from "./deploy";
 import { default as inquirer } from "inquirer";
 
 import fs from "fs";
-
-export type ContractAddresses = {
-    [contractName: string]: string
-}
 
 function guessContractName(contractName: string, names: string[]): string | undefined {
     const matched = names.find(e => e?.match(new RegExp(contractName, "i")));
@@ -29,7 +26,7 @@ export async function upgradeContract(
 
     const action = needsForceImport ? "force import" : "upgrade";
 
-    const addresses = JSON.parse(fs.readFileSync(addressesFilePath, "utf-8")) as ContractAddresses;
+    const addresses = loadContractAddresses(addressesFilePath);
 
     const contractNames = Object.keys(addresses);
 
