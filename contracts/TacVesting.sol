@@ -8,7 +8,7 @@ import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerklePr
 
 import { StakingI, STAKING_PRECOMPILE_ADDRESS } from "./precompiles/staking/StakingI.sol";
 import { DistributionI, DISTRIBUTION_PRECOMPILE_ADDRESS } from "./precompiles/distribution/DistributionI.sol";
-import { Coin, DecCoin } from "./precompiles/common/Types.sol";
+import { Coin } from "./precompiles/common/Types.sol";
 
 import { TacHeaderV1, OutMessageV1, TokenAmount, NFTAmount } from "@tonappchain/evm-ccl/contracts/core/Structs.sol";
 import { TacProxyV1Upgradeable } from "@tonappchain/evm-ccl/contracts/proxies/TacProxyV1Upgradeable.sol";
@@ -73,6 +73,11 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     mapping(string => UserInfo) public info;
 
     // === END OF STATE VARIABLES ===
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /**
      * @dev Initializer function to initialize the contract with initial state.

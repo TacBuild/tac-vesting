@@ -1,38 +1,10 @@
 import hre, { ethers } from "hardhat";
 import { deployTacVesting } from "../utils/deploy";
 import { locatTestnetConfig, mainnetConfig, testnetConfig } from "../config/config";
-import { RewardsConfig, createRewardsMerkleTree } from "../utils/rewards";
+import { loadRewadsConfig, createRewardsMerkleTree } from "../utils/rewards";
 
-import fs from "fs";
 import path from "path";
-
-function loadRewadsConfig(filePath: string): RewardsConfig[] {
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`Rewards config file not found: ${filePath}`);
-    }
-    const data = fs.readFileSync(filePath, 'utf8');
-    const conf = JSON.parse(data);
-
-    const rewardsConfig: RewardsConfig[] = [];
-
-    for (const [tvmAddr, rewardAmount] of Object.entries(conf)) {
-
-        if (!tvmAddr.startsWith('EQ')) {
-            throw new Error(`Invalid TVM address: ${tvmAddr}`);
-        }
-
-        if (typeof rewardAmount !== 'string') {
-            throw new Error(`Invalid reward amount for address ${tvmAddr}: ${rewardAmount}`);
-        }
-
-        rewardsConfig.push({
-            userTVMAddress: tvmAddr,
-            rewardAmount: ethers.parseEther(rewardAmount)
-        });
-    }
-
-    return rewardsConfig;
-}
+import { saveContractAddress } from "@tonappchain/evm-ccl";
 
 async function main() {
     const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY!;
@@ -88,15 +60,11 @@ async function main() {
         console.log("!!!!! Dont forget to fund the contract with TAC tokens on mainnet !!!!!");
     }
 
-    let addresses: { [key: string]: string } = {
-        tacVesting: await tacVesting.getAddress()
-    };
-
-    fs.writeFileSync(
+    saveContractAddress(
         addressesFilePath,
-        JSON.stringify(addresses, null, 2),
-        'utf8'
-    );
+        "tacVesting",
+        await tacVesting.getAddress(),
+    )
 
     console.log(`Finished deploying TacVesting on ${hre.network.name} network`);
 }

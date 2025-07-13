@@ -5,9 +5,9 @@ import { getContractSignatures } from "@tonappchain/evm-ccl";
 import { Artifacts } from "hardhat/internal/artifacts";
 
 async function main() {
-    let addressFilePath = path.resolve(__dirname, `../../signatures.json`);
+    let addressFilePath = path.resolve(__dirname, `../signatures.json`);
 
-    const artifacts = new Artifacts(path.resolve(__dirname, `../../artifacts`));
+    const artifacts = new Artifacts(path.resolve(__dirname, `../artifacts`));
     const signatires = await getContractSignatures(artifacts);
 
     fs.writeFileSync(addressFilePath, JSON.stringify(signatires, null, 2));
