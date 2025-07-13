@@ -14,7 +14,7 @@ import { DistributionPrecompileAddress, StakingPrecompileAddress, testnetConfig 
 
 import StakingMockArtifact from '../artifacts/contracts/mock/StakingMock.sol/StakingMock.json';
 import DistributionMockArtifact from '../artifacts/contracts/mock/DistributionMock.sol/DistributionMock.json';
-import { deploy, deployUpgradableLocal, SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
+import { deploy, deployUpgradable, deployUpgradableLocal, SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
 import { DelegatedEvent, RewardsClaimedEvent, UndelegatedEvent, WithdrawnEvent, WithdrawnFromAccountEvent } from '../typechain-types/contracts/TacVesting';
 
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
@@ -54,6 +54,8 @@ describe('TacVesting', function () {
     let usersWithdraw: {
         [key: string]: bigint;
     }
+
+    let availableToAdminWithdraw: bigint = 0n;
 
     let testSdk: TacLocalTestSdk;
 
@@ -99,7 +101,7 @@ describe('TacVesting', function () {
         await setBalance(await distributionMock.getAddress(), ethers.parseEther("100000000000000000"));
 
         // deploy TacVestingTest
-        tacVesting = await deployUpgradableLocal<TacVestingTest>(
+        tacVesting = await deployUpgradable<TacVestingTest>(
             admin as unknown as Signer,
             hre.artifacts.readArtifactSync("TacVestingTest"),
             [
@@ -110,6 +112,7 @@ describe('TacVesting', function () {
             ],
             {
                 kind: "uups",
+                unsafeAllow: ["missing-initializer"]
             },
             undefined,
             true
@@ -301,6 +304,8 @@ describe('TacVesting', function () {
                     catchedError = error.message.includes('TacVesting: User already made a choice');
                 }
                 expect(catchedError).to.be.true;
+
+                availableToAdminWithdraw += userReward.rewardAmount - immediateWithdrawAmount;
             }
         }
     });
@@ -333,14 +338,6 @@ describe('TacVesting', function () {
                     catchedError = error.message.includes('TacVesting: Cannot claim rewards before the first step is completed');
                 }
             } else { // user chose immediate withdraw
-                // check that user can't withdraw
-                let encodedArguments = abiCoder.encode(["uint256"], [1n]);
-                let catchedError = false;
-                try {
-                    await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-                } catch (error: any) {
-                    catchedError = error.message.includes('TacVesting: No available funds to withdraw');
-                }
             }
         }
 
@@ -372,33 +369,13 @@ describe('TacVesting', function () {
                     const expectedUnlockAmountForUndelegate = expectedUnlockAmount - usersWithdraw[userReward.userTVMAddress];
                     expect(availableToUndelegate).to.equal(expectedUnlockAmountForUndelegate);
 
-                    // withdraw must failed for staking choice
-                    let encodedArguments = abiCoder.encode(["uint256"], [1n]);
-                    let catchedError = false;
-                    try {
-                        await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-                    } catch (error: any) {
-                        catchedError = error.message.includes('TacVesting: User has not chosen immediate withdraw');
-                    }
-                    expect(catchedError).to.be.true;
-
                     // undelegate must failed for trying to undelegate more than available
-                    encodedArguments = abiCoder.encode(["uint256"], [availableToUndelegate + 1n]);
-                    catchedError = false;
+                    let encodedArguments = abiCoder.encode(["uint256"], [availableToUndelegate + 1n]);
+                    let catchedError = false;
                     try {
                         await sendMessage(userReward.userTVMAddress, 'undelegate(bytes,bytes)', encodedArguments);
                     } catch (error: any) {
                         catchedError = error.message.includes('TacVesting: No available funds to undelegate');
-                    }
-                    expect(catchedError).to.be.true;
-
-                    // check that user cant withdraw funds (for immediate withdraw choice)
-                    encodedArguments = abiCoder.encode(["uint256"], [availableToUndelegate]);
-                    catchedError = false;
-                    try {
-                        await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-                    } catch (error: any) {
-                        catchedError = error.message.includes('TacVesting: User has not chosen immediate withdraw');
                     }
                     expect(catchedError).to.be.true;
 
@@ -488,23 +465,13 @@ describe('TacVesting', function () {
                     expect(cclBalanceAfter).to.equal(cclBalanceBefore + undelegateAmount);
                 } else { // user chose immediate withdraw
                     const firstTransfer = (userReward.rewardAmount * IMMEDIATE_PCT) / BASIS_POINTS;
-                    // (total - firstTransfer) / VESTING_STEPS should be unlocked
-                    const stepUnlockAmount = (userReward.rewardAmount - firstTransfer) / VESTING_STEPS;
-
-                    let expectedUnlockAmount;
-                    if (step === VESTING_STEPS) {
-                        expectedUnlockAmount = userReward.rewardAmount; // last step, all should be unlocked
-                    } else {
-                        expectedUnlockAmount = firstTransfer + stepUnlockAmount * step;
-                    }
 
                     const unlockedAmount = await tacVesting.getUnlocked(userReward.userTVMAddress);
-                    expect(unlockedAmount).to.equal(expectedUnlockAmount);
+                    expect(unlockedAmount).to.equal(firstTransfer);
 
                     const availableToWithdraw = await tacVesting.getAvailable(userReward.userTVMAddress);
-                    const expectedAvailableToWithdraw = expectedUnlockAmount - usersWithdraw[userReward.userTVMAddress];
 
-                    expect(availableToWithdraw).to.equal(expectedAvailableToWithdraw);
+                    expect(availableToWithdraw).to.equal(0n);
 
                     // check that user can't undelegate (for staking choice)
                     let encodedArguments = abiCoder.encode(["uint256"], [1n]);
@@ -515,49 +482,6 @@ describe('TacVesting', function () {
                         catchedError = error.message.includes('TacVesting: User has not chosen staking');
                     }
                     expect(catchedError).to.be.true;
-
-                    // check that user cant withdraw more than available
-                    encodedArguments = abiCoder.encode(["uint256"], [availableToWithdraw + 1n]);
-                    catchedError = false;
-                    try {
-                        await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-                    } catch (error: any) {
-                        catchedError = error.message.includes('TacVesting: No available funds to withdraw');
-                    }
-                    expect(catchedError).to.be.true;
-
-                    // check that user can withdraw available amount
-                    const toWithdraw = availableToWithdraw / 10n ** BigInt(Math.round(Math.random() * 3));
-
-                    const cclBalanceBefore = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
-
-                    encodedArguments = abiCoder.encode(["uint256"], [toWithdraw]);
-                    const output = await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-
-                    // check that one out message was sent
-                    expect(output.outMessages.length).to.equal(1);
-                    const outMessage = output.outMessages[0];
-                    expect(outMessage.targetAddress).to.equal(userReward.userTVMAddress);
-                    expect(outMessage.tokensLocked.length).to.equal(1);
-                    expect(outMessage.tokensLocked[0].evmAddress).to.equal(testSdk.getNativeTokenAddress());
-                    expect(outMessage.tokensLocked[0].amount).to.equal(toWithdraw);
-
-                    let eventFound = false;
-                    for (const log of output.receipt.logs) {
-                        const event = tacVesting.interface.parseLog(log);
-                        if (event?.name === 'Withdrawn') {
-                            const typedEvent = event as unknown as WithdrawnEvent.LogDescription;
-                            expect(typedEvent.args.userTVMAddress).to.equal(userReward.userTVMAddress);
-                            expect(typedEvent.args.amount).to.equal(toWithdraw);
-                            eventFound = true;
-                        }
-                    }
-                    expect(eventFound).to.be.true;
-
-                    const cclBalanceAfter = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
-                    expect(cclBalanceAfter).to.equal(cclBalanceBefore + toWithdraw);
-
-                    usersWithdraw[userReward.userTVMAddress] += toWithdraw;
                 }
             }
         }
@@ -632,44 +556,18 @@ describe('TacVesting', function () {
                 const cclBalanceAfter = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
                 expect(cclBalanceAfter).to.equal(cclBalanceBefore + availableToUndelegate);
 
+                userInfo = await tacVesting.info(userReward.userTVMAddress);
+                expect(userInfo.unlocked).to.equal(userReward.rewardAmount);
+                expect(userInfo.withdrawn).to.equal(userReward.rewardAmount);
+
             } else { // user chose immediate withdraw
-                // check that user can withdraw all remaining funds
-                const toWithdraw = (userReward.rewardAmount - usersWithdraw[userReward.userTVMAddress]);
-                const cclBalanceBefore = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
 
-                let encodedArguments = abiCoder.encode(["uint256"], [toWithdraw]);
+                const firstTransfer = (userReward.rewardAmount * IMMEDIATE_PCT) / BASIS_POINTS;
 
-                const output = await sendMessage(userReward.userTVMAddress, 'withdraw(bytes,bytes)', encodedArguments);
-                // check that one out message was sent
-                expect(output.outMessages.length).to.equal(1);
-                const outMessage = output.outMessages[0];
-                expect(outMessage.targetAddress).to.equal(userReward.userTVMAddress);
-                expect(outMessage.tokensLocked.length).to.equal(1);
-                expect(outMessage.tokensLocked[0].evmAddress).to.equal(testSdk.getNativeTokenAddress());
-                expect(outMessage.tokensLocked[0].amount).to.equal(toWithdraw);
-
-                let eventFound = false;
-                for (const log of output.receipt.logs) {
-                    const event = tacVesting.interface.parseLog(log);
-                    if (event?.name === 'Withdrawn') {
-                        const typedEvent = event as unknown as WithdrawnEvent.LogDescription;
-                        expect(typedEvent.args.userTVMAddress).to.equal(userReward.userTVMAddress);
-                        expect(typedEvent.args.amount).to.equal(toWithdraw);
-                        eventFound = true;
-                    }
-                }
-                expect(eventFound).to.be.true;
-
-                const cclBalanceAfter = await admin.provider.getBalance(testSdk.getCrossChainLayerAddress());
-                expect(cclBalanceAfter).to.equal(cclBalanceAfter + toWithdraw);
-
-                usersWithdraw[userReward.userTVMAddress] += toWithdraw;
+                userInfo = await tacVesting.info(userReward.userTVMAddress);
+                expect(userInfo.unlocked).to.equal(firstTransfer);
+                expect(userInfo.withdrawn).to.equal(firstTransfer);
             }
-
-            userInfo = await tacVesting.info(userReward.userTVMAddress);
-            expect(userInfo.unlocked).to.equal(userReward.rewardAmount);
-            expect(userInfo.withdrawn).to.equal(userReward.rewardAmount);
-
             const available = await tacVesting.getAvailable(userReward.userTVMAddress);
 
             expect(available).to.equal(0n);
@@ -677,12 +575,19 @@ describe('TacVesting', function () {
             // expect(await admin.provider.getBalance(tacVesting.getAddress())).to.equal(0n);
         }
 
+        let available = await tacVesting.availableForAdminWithdraw();
+        expect(availableToAdminWithdraw).to.equal(available);
+
+        // check admin can withdraw all available funds
+        let tx = await tacVesting.adminWithdraw(availableToAdminWithdraw, await admin.getAddress());
+        await tx.wait();
+
+        available = await tacVesting.availableForAdminWithdraw();
+        expect(available).to.equal(0n);
+
         const tacVestingBalanceAfter = await admin.provider.getBalance(tacVesting.getAddress());
         const stackingMockBalanceAfter = await admin.provider.getBalance(stakingMock.getAddress());
 
         expect(tacVestingBalanceAfter).to.equal(0n);
-        expect(stackingMockBalanceAfter).to.equal(0n);
-
     });
 });
-

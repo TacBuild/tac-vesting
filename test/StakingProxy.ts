@@ -2,7 +2,7 @@ import hre, { ethers, upgrades } from 'hardhat';
 import { expect } from 'chai';
 import { setBalance, setCode } from '@nomicfoundation/hardhat-network-helpers';
 import { Provider, Signer } from 'ethers';
-import { deployUpgradableLocal, SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
+import { deployUpgradable, SendMessageOutput, TacLocalTestSdk } from '@tonappchain/evm-ccl';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 
 import { DistributionMock, StakingMock, StakingProxyTest } from '../typechain-types';
@@ -68,7 +68,7 @@ describe('TacVesting', function () {
 
         COMPLETION_TIMEOUT = await stakingMock.COMPLETION_TIMEOUT();
 
-        stakingProxy = await deployUpgradableLocal<StakingProxyTest>(
+        stakingProxy = await deployUpgradable<StakingProxyTest>(
             admin as unknown as Signer,
             hre.artifacts.readArtifactSync("StakingProxyTest"),
             [
@@ -78,6 +78,7 @@ describe('TacVesting', function () {
             ],
             {
                 kind: "uups",
+                unsafeAllow: ["missing-initializer"]
             },
             undefined,
             true

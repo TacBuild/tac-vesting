@@ -54,7 +54,7 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
 
     uint256 public constant BASIS_POINTS = 10_000; // 100 % = 10 000 bps
     uint256 public constant IMMEDIATE_PCT = 3_000; // immediate rewards withdrawal percentage (30 % = 3 000 bps)
-    uint256 public constant VESTING_STEPS = 3; // number of vesting steps (3 steps = 3 months)
+    uint256 public constant VESTING_STEPS = 2; // number of vesting steps (3 steps = 3 months)
 
     // === STATE VARIABLES ===
     ISAFactory public saFactory; // Smart Account Factory
@@ -71,6 +71,8 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     }
 
     mapping(string => UserInfo) public info;
+
+    uint256 public availableForAdminWithdraw;
 
     // === END OF STATE VARIABLES ===
 
@@ -118,6 +120,21 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
     ) external onlyOwner {
         require(_merkleRoot != bytes32(0), "TacVesting: Merkle root cannot be zero");
         merkleRoot = _merkleRoot;
+    }
+
+    /// @dev Withdraw available funds for admin
+    /// @param amount The amount to withdraw.
+    /// @param to The address to withdraw to.
+    function adminWithdraw(
+        uint256 amount,
+        address payable to
+    ) external onlyOwner {
+        require(amount <= availableForAdminWithdraw, "TacVesting: Not enough available funds for admin withdraw");
+        require(to != address(0), "TacVesting: Cannot withdraw to zero address");
+        availableForAdminWithdraw -= amount;
+
+        (bool success, ) = to.call{value: amount}("");
+        require(success, "TacVesting: Admin withdraw failed");
     }
 
     //================================================================
@@ -195,18 +212,17 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
             return 0; // User has not made a choice yet
         }
 
+        // User has chosen immediate withdraw
+        if (userInfo.smartAccount == ITacSmartAccount(address(0))) {
+            return userInfo.unlocked; // Immediate rewards are already set
+        }
+
         uint256 afterChoiceTime = block.timestamp - userInfo.choiceStartTime;
         uint256 stepsCompleted = afterChoiceTime / stepDuration > VESTING_STEPS ? VESTING_STEPS : afterChoiceTime / stepDuration;
         if (stepsCompleted == VESTING_STEPS) {
             unlocked = userInfo.userTotalRewards; // All rewards are unlocked after the last step
         } else {
-            if (address(userInfo.smartAccount) != address(0)) { // if user choosen staking
-                unlocked = (userInfo.userTotalRewards * stepsCompleted) / VESTING_STEPS;
-            } else { // if user choosen immediate withdraw
-                uint256 firstTransfer = (userInfo.userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
-                uint256 stepRewards = (userInfo.userTotalRewards - firstTransfer) / VESTING_STEPS;
-                unlocked = firstTransfer + (stepRewards * stepsCompleted);
-            }
+            unlocked = (userInfo.userTotalRewards * stepsCompleted) / VESTING_STEPS;
         }
     }
 
@@ -434,39 +450,13 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         userInfo.unlocked = (params.userTotalRewards * IMMEDIATE_PCT) / BASIS_POINTS;
         userInfo.withdrawn = userInfo.unlocked;
 
+        availableForAdminWithdraw += (params.userTotalRewards - userInfo.unlocked);
+
         // send immediate rewards to TON user
         _bridgeToTon(tacHeader, userInfo.unlocked);
 
         emit Withdrawn(tacHeader.tvmCaller, userInfo.unlocked);
     }
-
-    /// @dev Withdraw available funds
-    /// @param _tacHeader The TAC header.
-    /// @param _params The encoded uint256 amount to withdraw.
-    function withdraw(
-        bytes calldata _tacHeader,
-        bytes calldata _params
-    ) external _onlyCrossChainLayer {
-
-        TacHeaderV1 memory tacHeader = _decodeTacHeader(_tacHeader);
-        uint256 amount = abi.decode(_params, (uint256));
-
-        UserInfo storage userInfo = info[tacHeader.tvmCaller];
-        _checkImmediateChoice(userInfo);
-        _updateUnlocked(userInfo);
-        require(
-            (userInfo.unlocked - userInfo.withdrawn) >= amount,
-            "TacVesting: No available funds to withdraw");
-
-        // send rewards to user
-        _bridgeToTon(tacHeader, amount);
-
-        // Update user's withdrawn amount
-        userInfo.withdrawn += amount;
-
-        emit Withdrawn(tacHeader.tvmCaller, amount);
-    }
-
 
     //================================================================
     // VIEW FUNCTIONS
