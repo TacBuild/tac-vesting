@@ -39,6 +39,21 @@ async function main() {
     await tx.wait();
 
     console.log(`Rewards merkle root set: ${await tacVesting.merkleRoot()}`);
+
+    if (hre.network.name !== 'tac_mainnet') {
+        console.log("Fund the contract with TAC tokens for testing purposes");
+        let totalRewards = 0n;
+        for (const reward of rewardsConfig) {
+            totalRewards += reward.rewardAmount;
+        }
+        // send some TAC to the contract for testing
+        let tx = await deployer.sendTransaction({
+            to: await tacVesting.getAddress(),
+            value: totalRewards
+        });
+        await tx.wait();
+        console.log(`Funded on ${tx.hash}`);
+    }
 }
 
 main();
