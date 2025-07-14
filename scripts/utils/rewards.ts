@@ -2,6 +2,7 @@ import { MerkleTree } from 'merkletreejs';
 import { ethers, keccak256 } from 'ethers';
 
 import fs from 'fs';
+import { Address } from '@ton/ton';
 
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
@@ -21,21 +22,29 @@ export function loadRewadsConfig(filePath: string): RewardsConfig[] {
 
     for (const [tvmAddr, rewardAmount] of Object.entries(conf)) {
 
-        if (!tvmAddr.startsWith('EQ')) {
-            throw new Error(`Invalid TVM address: ${tvmAddr}`);
-        }
-
         if (typeof rewardAmount !== 'string') {
             throw new Error(`Invalid reward amount for address ${tvmAddr}: ${rewardAmount}`);
         }
 
+        const address = Address.parse(tvmAddr);
+        const normalizedTVMAddress = address.toString({ bounceable: true, testOnly: false});
+
         rewardsConfig.push({
-            userTVMAddress: tvmAddr,
+            userTVMAddress: normalizedTVMAddress,
             rewardAmount: ethers.parseEther(rewardAmount)
         });
     }
 
     return rewardsConfig;
+}
+
+export function saveRewardsConfig(filePath: string, rewards: RewardsConfig[]): void {
+    const rewardsData: Record<string, string> = {};
+    for (const reward of rewards) {
+        // Convert the TVM address to a string and the reward amount to a string
+        rewardsData[reward.userTVMAddress] = ethers.formatEther(reward.rewardAmount);
+    }
+    fs.writeFileSync(filePath, JSON.stringify(rewardsData, null, 2));
 }
 
 export function createLeaf(reward: RewardsConfig): string {

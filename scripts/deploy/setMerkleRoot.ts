@@ -1,7 +1,7 @@
 import hre, { ethers } from "hardhat";
 import { deployTacVesting, loadContractAddresses } from "../utils/deploy";
 import { locatTestnetConfig, mainnetConfig, testnetConfig } from "../config/config";
-import { loadRewadsConfig, createRewardsMerkleTree } from "../utils/rewards";
+import { loadRewadsConfig, createRewardsMerkleTree, saveRewardsConfig } from "../utils/rewards";
 
 import path from "path";
 import { saveContractAddress } from "@tonappchain/evm-ccl";
@@ -29,6 +29,9 @@ async function main() {
     const addresses = loadContractAddresses(addressesFilePath);
     const rewardsConfig = loadRewadsConfig(rewardsFilePath);
 
+    // rewrite rewards config with normalized addresses
+    saveRewardsConfig(rewardsFilePath, rewardsConfig);
+
     const tree = createRewardsMerkleTree(rewardsConfig);
 
     console.log(`New rewards merkle root: ${tree.getHexRoot()}`);
@@ -46,6 +49,7 @@ async function main() {
         for (const reward of rewardsConfig) {
             totalRewards += reward.rewardAmount;
         }
+
         // send some TAC to the contract for testing
         let tx = await deployer.sendTransaction({
             to: await tacVesting.getAddress(),
