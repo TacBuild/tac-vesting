@@ -5,6 +5,11 @@
       "address": "0x365e03cd6344AcE42a54707987b762c7323134B9",
       "txHash": "0x4d9cdc4d49ec46688ad7dc0eb6aaa4620a4de1fd5e636198f820be9989eb7917",
       "kind": "uups"
+    },
+    {
+      "address": "0xFf8FCb371f611bF3e5e8Ff57c951988bD1d3ee86",
+      "txHash": "0xf2119b34b1e440824ff6cfb54e1caa3ee8da107e26d02a788cf6b451e51ecda0",
+      "kind": "uups"
     }
   ],
   "impls": {
@@ -93,6 +98,243 @@
           "t_contract(ISAFactory)3277": {
             "label": "contract ISAFactory",
             "numberOfBytes": "20"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable2Step": [
+            {
+              "contract": "Ownable2StepUpgradeable",
+              "label": "_pendingOwner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol:29",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:tac.storage.TacProxyV1Upgradeable": [
+            {
+              "contract": "TacProxyV1Upgradeable",
+              "label": "_crossChainLayer",
+              "type": "t_address",
+              "src": "@tonappchain/evm-ccl/contracts/proxies/TacProxyV1Upgradeable.sol:28",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "361fe46c2ce1fd40122cf281260c4339d2492d198c411a2e3ae78f8a452a5f3f": {
+      "address": "0x204fd18237e1F153AF1b238C728e855612A62225",
+      "txHash": "0x668bc0d6385475c4b08de2c459af99bd14e408189e10e8c53bfdd6da49082a6e",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "saFactory",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(ISAFactory)3277",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:60"
+          },
+          {
+            "label": "stepDuration",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:61"
+          },
+          {
+            "label": "merkleRoot",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_bytes32",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:62"
+          },
+          {
+            "label": "info",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_string_memory_ptr,t_struct(UserInfo)3450_storage)",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:73"
+          },
+          {
+            "label": "availableForAdminWithdraw",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_uint256",
+            "contract": "TacVesting",
+            "src": "contracts/TacVesting.sol:75"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)128_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(Ownable2StepStorage)13_storage": {
+            "label": "struct Ownable2StepUpgradeable.Ownable2StepStorage",
+            "members": [
+              {
+                "label": "_pendingOwner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)68_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(TacProxyV1UpgradeableStorage)1276_storage": {
+            "label": "struct TacProxyV1Upgradeable.TacProxyV1UpgradeableStorage",
+            "members": [
+              {
+                "label": "_crossChainLayer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(ISAFactory)3277": {
+            "label": "contract ISAFactory",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ITacSmartAccount)3352": {
+            "label": "contract ITacSmartAccount",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_string_memory_ptr,t_struct(UserInfo)3450_storage)": {
+            "label": "mapping(string => struct TacVesting.UserInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_string_memory_ptr": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(UserInfo)3450_storage": {
+            "label": "struct TacVesting.UserInfo",
+            "members": [
+              {
+                "label": "choiceStartTime",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "smartAccount",
+                "type": "t_contract(ITacSmartAccount)3352",
+                "offset": 8,
+                "slot": "0"
+              },
+              {
+                "label": "validatorAddress",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "userTotalRewards",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "unlocked",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "withdrawn",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
           }
         },
         "namespaces": {

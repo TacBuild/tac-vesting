@@ -26,13 +26,17 @@ export function loadRewadsConfig(filePath: string): RewardsConfig[] {
             throw new Error(`Invalid reward amount for address ${tvmAddr}: ${rewardAmount}`);
         }
 
-        const address = Address.parse(tvmAddr);
-        const normalizedTVMAddress = address.toString({ bounceable: true, testOnly: false});
+        try {
+            const address = Address.parse(tvmAddr);
+            const normalizedTVMAddress = address.toString({ bounceable: true, testOnly: false});
 
-        rewardsConfig.push({
-            userTVMAddress: normalizedTVMAddress,
-            rewardAmount: ethers.parseEther(rewardAmount)
-        });
+            rewardsConfig.push({
+                userTVMAddress: normalizedTVMAddress,
+                rewardAmount: ethers.parseEther(rewardAmount)
+            });
+        } catch (error) {
+            console.log(`Invalid TVM address: ${tvmAddr}`);
+        }
     }
 
     return rewardsConfig;

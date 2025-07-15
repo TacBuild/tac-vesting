@@ -29,12 +29,20 @@ async function main() {
     const addresses = loadContractAddresses(addressesFilePath);
     const rewardsConfig = loadRewadsConfig(rewardsFilePath);
 
+    let totalRewards = 0n;
+    for (const reward of rewardsConfig) {
+        totalRewards += reward.rewardAmount;
+    }
+
+    console.log(`Total rewards: ${ethers.formatEther(totalRewards)} TAC`);
+
     // rewrite rewards config with normalized addresses
     saveRewardsConfig(rewardsFilePath, rewardsConfig);
 
     const tree = createRewardsMerkleTree(rewardsConfig);
 
     console.log(`New rewards merkle root: ${tree.getHexRoot()}`);
+
 
     const tacVesting = await ethers.getContractAt("TacVesting", addresses.tacVesting, deployer);
 
@@ -45,10 +53,6 @@ async function main() {
 
     if (hre.network.name !== 'tac_mainnet') {
         console.log("Fund the contract with TAC tokens for testing purposes");
-        let totalRewards = 0n;
-        for (const reward of rewardsConfig) {
-            totalRewards += reward.rewardAmount;
-        }
 
         // send some TAC to the contract for testing
         let tx = await deployer.sendTransaction({
