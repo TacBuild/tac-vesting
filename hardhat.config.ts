@@ -65,10 +65,19 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
+      tac_mainnet: 'empty',
       tac_testnet: 'empty',
       tac_testnet_spb: 'empty'
     },
     customChains: [
+      {
+        network: "tac_mainnet",
+        chainId: 239,
+        urls: {
+          apiURL: "https://explorer.tac.build/api",
+          browserURL: "https://explorer.tac.build"
+        }
+      },
       {
         network: "tac_testnet",
         chainId: 2390,
