@@ -368,11 +368,6 @@ contract TacVesting is UUPSUpgradeable, TacProxyV1Upgradeable, Ownable2StepUpgra
         UserInfo storage userInfo = info[tacHeader.tvmCaller];
         _checkStaking(userInfo);
 
-        // user can claim rewards only after the first step is completed
-        if (userInfo.choiceStartTime + stepDuration > block.timestamp) {
-            revert("TacVesting: Cannot claim rewards before the first step is completed");
-        }
-
         // Withdraw the rewards from the validator
         bytes memory ret = userInfo.smartAccount.execute(
             DISTRIBUTION_PRECOMPILE_ADDRESS,
